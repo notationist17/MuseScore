@@ -637,9 +637,10 @@ QByteArray Selection::mimeData() const
 //   hasElementInTrack
 //---------------------------------------------------------
 
+// !seg can happen for linearize with missing coda (a28.xml) 
 bool hasElementInTrack(Segment* startSeg, Segment* endSeg, int track)
       {
-      for (Segment* seg = startSeg; seg != endSeg; seg = seg->next1MM()) {
+      for (Segment* seg = startSeg; seg && seg != endSeg; seg = seg->next1MM()) {
             if (seg->element(track))
                   return true;
             }
@@ -652,7 +653,7 @@ bool hasElementInTrack(Segment* startSeg, Segment* endSeg, int track)
 
 int firstElementInTrack(Segment* startSeg, Segment* endSeg, int track)
       {
-      for (Segment* seg = startSeg; seg != endSeg; seg = seg->next1MM()) {
+      for (Segment* seg = startSeg; seg && seg != endSeg; seg = seg->next1MM()) {
             if (seg->element(track))
                   return seg->tick();
             }

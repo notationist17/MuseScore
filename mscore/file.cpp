@@ -2519,7 +2519,7 @@ bool MuseScore::saveSvg(Score* score, const QString& saveName)
       QString title(score->title());
       printer.setTitle(title);
       printer.setFileName(saveName);
-      const PageFormat* pf = cs->pageFormat();
+      const PageFormat* pf = score->pageFormat();
 
       QRectF r;
       if (trimMargin >= 0 && score->npages() == 1) {
@@ -2593,31 +2593,31 @@ bool MuseScore::saveSvg(Score* score, const QString& saveName)
         QList<const Element*> pel = page->elements();
         qStableSort(pel.begin(), pel.end(), elementLessThan);
 
-        Element::Type eType;
-        foreach (const Element* e, pel) {
-            // Always exclude invisible elements
-            if (!e->visible())
-                    continue;
+            Element::Type eType;
+            for (const Element* e : pel) {
+                  // Always exclude invisible elements
+                  if (!e->visible())
+                        continue;
 
-            eType = e->type();
-            switch (eType) { // In future sub-type code, this switch() grows, and eType gets used
-            case Element::Type::STAFF_LINES : // Handled in the 1st pass above
-                continue; // Exclude from 2nd pass
-                break;
-            default:
-                break;
-            } // switch(eType)
+                  eType = e->type();
+                  switch (eType) { // In future sub-type code, this switch() grows, and eType gets used
+                  case Element::Type::STAFF_LINES : // Handled in the 1st pass above
+                        continue; // Exclude from 2nd pass
+                        break;
+                  default:
+                        break;
+                  } // switch(eType)
 
-            // Set the Element pointer inside SvgGenerator/SvgPaintEngine
-            printer.setElement(e);
+                  // Set the Element pointer inside SvgGenerator/SvgPaintEngine
+                  printer.setElement(e);
 
-            // Paint it
-            paintElement(p, e);
-        }
-        p.translate(QPointF(pf->width() * DPI, 0.0));
+                  // Paint it
+                  paintElement(p, e);
+            }
+            p.translate(QPointF(pf->width() * DPI, 0.0));
       }
 
-    // Clean up and return
+      // Clean up and return
       score->setPrinting(false);
       MScore::pdfPrinting = false;
       p.end(); // Writes MuseScore SVG file to disk, finally

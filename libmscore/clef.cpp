@@ -265,10 +265,12 @@ void Clef::layout1()
             case ClefType::F8:                             // F clef 8va bassa on penultimate line
                   symbol->setSym(SymId::fClef8vb);
                   yoff = 1.0 * curLineDist;
+                  pb = 3;
                   break;
             case ClefType::F15:                            // F clef 15ma bassa on penultimate line
                   symbol->setSym(SymId::fClef15mb);
                   yoff = 1.0 * curLineDist;
+                  pb = 3;
                   break;
             case ClefType::F_B:                            // baritone clef
                   symbol->setSym(SymId::fClef);

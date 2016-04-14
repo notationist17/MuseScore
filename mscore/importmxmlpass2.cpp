@@ -4446,10 +4446,9 @@ Note* MusicXMLParserPass2::note(const QString& partId,
             // skip to either start of next <note> child or end of <note>
             // currently at end of last <note> child handled
             //qDebug("::note before skip tokenString '%s' name '%s'", qPrintable(_e.tokenString()), qPrintable(_e.name().toString()));
-            do
-                  _e.readNext();
             while (!(_e.tokenType() == QXmlStreamReader::StartElement)
-                   && !(_e.tokenType() == QXmlStreamReader::EndElement && _e.name() == "note"));
+                   && !(_e.tokenType() == QXmlStreamReader::EndElement && _e.name() == "note"))
+                  _e.readNext();
             //qDebug("::note after skip tokenString '%s' name '%s'", qPrintable(_e.tokenString()), qPrintable(_e.name().toString()));
 
             }

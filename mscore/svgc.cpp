@@ -87,8 +87,9 @@ namespace Ms {
 // Check if the file might be a clever construction that would take ages to parse
 QString checkSafety(Score * score) {
 
+  int nexcerpts = score->rootScore()->excerpts().size();
 
-  if (score->rootScore()->excerpts().size() > 60) return QString("Too many parts");
+  if (nexcerpts > 60) return QString("Too many parts");
 
   score->repeatList()->unwind();
   if (score->repeatList()->size() > 100) return QString("Too many repeats");
@@ -99,6 +100,7 @@ QString checkSafety(Score * score) {
     qreal endtime = score->tempomap()->tick2time(endTick);
 
     if (endtime>60*20) return QString("Piece lasts too long");
+    if (endtime*nexcerpts>60*40) return QString("Piece lasts too long with parts");
   }
 
   if (score->lastMeasure() == NULL) return QString("No notes");
@@ -224,6 +226,8 @@ void addFileToZip(MQZipWriter * uz, const QString& filename, const QString & zip
 void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, const QMap<int,qreal>& t2t, const qreal t0);
 
 bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const bool do_linearize, const QString& partsName) {
+
+  cs->setSpatium(5); // = 1.76389mm; SVG export broken for other values
 
   QJsonObject partsinfo;
   qreal scale_tempo = 1.0;
