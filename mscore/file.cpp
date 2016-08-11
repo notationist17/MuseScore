@@ -2072,6 +2072,11 @@ Score::FileError readScore(Score* score, QString name, bool ignoreVersionError)
             for (auto i : imports) {
                   if (i.extension == suffix) {
                         Score::FileError rv = (*i.importF)(score, name);
+
+                        // Sibelius has a bad tendency to name normal xml as mxl
+                        if (suffix == "mxl" && rv != Score::FileError::FILE_NO_ERROR)
+                              rv =  importMusicXml(score, name);
+
                         if (rv != Score::FileError::FILE_NO_ERROR)
                               return rv;
                         found = true;

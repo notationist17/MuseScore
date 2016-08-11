@@ -176,7 +176,7 @@ void ExportMidi::writeHeader()
       //--------------------------------------------
 
       TempoMap* tempomap = cs->tempomap();
-      int relTempo = tempomap->relTempo();
+      qreal relTempo = tempomap->relTempo();
       foreach(const RepeatSegment* rs, *cs->repeatList()) {
             int startTick  = rs->tick;
             int endTick    = startTick + rs->len;
@@ -248,6 +248,7 @@ bool ExportMidi::write(const QString& name, bool midiExpandRepeats)
                   // "normal", "pizzicato", "tremolo" for Strings,
                   // "normal", "mute" for Trumpet
                   foreach(const Channel* ch, j->second->channel()) {
+                        if (ch->mute) continue;
                         char port    = part->score()->midiPort(ch->channel);
                         char channel = part->score()->midiChannel(ch->channel);
 

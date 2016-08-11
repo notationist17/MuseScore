@@ -138,6 +138,7 @@ bool exportScoreParts = false;
 QString mscoreGlobalShare;
 
 static QString outFileName;
+static QString partsFileName;
 static QString audioDriver;
 static QString pluginName;
 static QString styleFile;
@@ -665,7 +666,7 @@ MuseScore::MuseScore()
       for (auto i : {
             "", "file-save", "file-save-as", "file-save-a-copy",
             "file-save-selection", "file-save-online", "file-export", "file-part-export", "file-import-pdf",
-            "", "file-close", "", "parts", "album" }) {
+            "", "linearize", "", "file-close", "", "parts", "album" }) {
             if (!*i)
                   _fileMenu->addSeparator();
             else
@@ -2215,6 +2216,16 @@ static bool processNonGui()
                   cs->switchToPageMode();
                   rv = savePositions(cs, fn, false);
                   }
+            else if (fn.endsWith("svc")) {
+                  rv = mscore->saveSvgCollection(cs, fn, true, partsFileName);
+                  }
+            else if (fn.endsWith("json")) {
+                  rv = mscore->getPartsDescriptions(cs, fn);
+                  }
+            else if (fn.endsWith("mld")) {
+                  rv = mscore->saveMLData(cs, fn, partsFileName);
+                  }
+
             else if (fn.endsWith(".mlog"))
                   return cs->sanityCheck(fn);
             else {
@@ -4122,6 +4133,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             newFile();
       else if (cmd == "quit")
             close();
+      else if (cmd == "linearize")
+            newLinearized(cs);
       else if (cmd == "masterpalette")
             showMasterPalette();
       else if (cmd == "key-signatures")
@@ -4709,7 +4722,8 @@ int main(int argc, char* av[])
       parser.addOption(QCommandLineOption({"t", "test-mode"}, "Set testMode flag for all files"));
       parser.addOption(QCommandLineOption({"M", "midi-operations"}, "Specify MIDI import operations file", "file"));
       parser.addOption(QCommandLineOption({"w", "no-webview"}, "No web view in start center"));
-      parser.addOption(QCommandLineOption({"P", "export-score-parts"}, "used with -o <file>.pdf, export score + parts"));
+      //parser.addOption(QCommandLineOption({"P", "export-score-parts"}, "used with -o <file>.pdf, export score + parts"));
+      parser.addOption(QCommandLineOption({"P", "partsfile"}, "used with -o <file>.{svc|json}","pname"));
 
       parser.addPositionalArgument("scorefiles", "The files to open", "[scorefile...]");
 
@@ -4752,6 +4766,12 @@ int main(int argc, char* av[])
                    parser.showHelp(EXIT_FAILURE);
             converterDpi = temp.toDouble();
             }
+      if (parser.isSet("P")) {
+            MScore::noGui = true;
+            partsFileName = parser.value("P");
+            if (partsFileName.isEmpty())
+                  parser.showHelp(EXIT_FAILURE);
+            }
       if (parser.isSet("T")) {
             QString temp = parser.value("T");
             if (temp.isEmpty())
@@ -4791,9 +4811,9 @@ int main(int argc, char* av[])
             preferences.midiImportOperations.setOperationsFile(temp);
             }
       noWebView = parser.isSet("w");
-      exportScoreParts = parser.isSet("export-score-parts");
-      if (exportScoreParts && !converterMode)
-            parser.showHelp(EXIT_FAILURE);
+      //exportScoreParts = parser.isSet("export-score-parts");
+      //if (exportScoreParts && !converterMode)
+      //      parser.showHelp(EXIT_FAILURE);
 
       QStringList argv = parser.positionalArguments();
 
