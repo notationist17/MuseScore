@@ -678,9 +678,13 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
 
                   int tick = cr->segment()->tick();
 
-                  if (!tick2pos.contains(tick) || tick2pos[tick]>lpos || 
+
+                  //qWarning() << "POS" << tick << tick2pos.value(tick,-1) << lpos << is_rest.value(tick,false) << (e->type()== Element::Type::NOTE);
+                  if (!tick2pos.contains(tick) || tick2pos[tick]<lpos || 
                       (is_rest.value(tick,false) && e->type() == Element::Type::NOTE)) // is_rest check here mainly for the full measure rest special case if there are notes in other voices
                     tick2pos[tick] = lpos;
+
+                  //qWarning() << "NPOS" << tick << tick2pos[tick];
 
                   // NB! ar[17] = !ar.contains(17); would not work as expected...
                   just_tied.insert(tick,just_tied.value(tick,true) && 
