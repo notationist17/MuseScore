@@ -235,22 +235,28 @@ void Clef::layout1()
 
       Symbol* symbol = new Symbol(score());
 
+      qreal pt = 0.0, pb = 0.0;
+
       switch (curClefType) {
             case ClefType::G:                              // G clef on 2nd line
                   symbol->setSym(SymId::gClef);
                   yoff = 3.0 * curLineDist;
+                  pt = 3; pb = 3;
                   break;
             case ClefType::G1:                             // G clef 8va on 2nd line
                   symbol->setSym(SymId::gClef8va);
                   yoff = 3.0 * curLineDist;
+                  pt = 3; pb = 3;
                   break;
             case ClefType::G2:                             // G clef 15ma on 2nd line
                   symbol->setSym(SymId::gClef15ma);
                   yoff = 3.0 * curLineDist;
+                  pt = 3; pb = 3;
                   break;
             case ClefType::G3:                             // G clef 8vb on 2nd line
                   symbol->setSym(SymId::gClef8vb);
                   yoff = 3.0 * curLineDist;
+                  pt = 3; pb = 3;
                   break;
             case ClefType::F:                              // F clef on penultimate line
                   symbol->setSym(SymId::fClef);
@@ -338,6 +344,12 @@ void Clef::layout1()
             addbbox(e->bbox().translated(e->pos()));
             e->setSelected(selected());
             }
+
+      QRectF nbox = QRectF(0.0,bbox().top()-pt,1.0,bbox().height()+pb+pt);
+      addbbox(nbox);
+
+      //QRectF bb = bbox().translated(pos());
+      //qWarning() << "CC" << bb.top() << bb.bottom();
       }
 
 //---------------------------------------------------------
