@@ -84,15 +84,22 @@ namespace Ms {
 //   saveSvgCollection
 //---------------------------------------------------------
 
+void writeErrorToFile(QString errorstring, QString ofilename) {
+  QFile errfile(ofilename+".err");
+  errfile.open(QIODevice::WriteOnly | QIODevice::Text);
+  errfile.write(errorstring.toUtf8());
+  errfile.close(); 
+}
+
 // Check if the file might be a clever construction that would take ages to parse
 QString checkSafety(Score * score) {
 
   int nexcerpts = score->rootScore()->excerpts().size();
 
-  if (nexcerpts > 60) return QString("Too many parts");
+  if (nexcerpts > 60) return QString("Piece has too many parts");
 
   score->repeatList()->unwind();
-  if (score->repeatList()->size() > 100) return QString("Too many repeats");
+  if (score->repeatList()->size() > 100) return QString("Piece has too many repeats");
 
   if (!score->repeatList()->isEmpty()) {
     RepeatSegment * rs = score->repeatList()->last();
@@ -100,13 +107,13 @@ QString checkSafety(Score * score) {
     qreal endtime = score->tempomap()->tick2time(endTick);
 
     if (endtime>60*20) return QString("Piece lasts too long");
-    if (endtime*nexcerpts>60*40) return QString("Piece lasts too long with parts");
+    if (endtime*nexcerpts>60*80) return QString("Piece lasts too long with parts");
   }
 
-  if (score->lastMeasure() == NULL) return QString("No notes");
+  if (score->lastMeasure() == NULL) return QString("Piece has no notes");
 
   // Empty string to signify 'no complaints'
-  return QString();
+  return QString("");
 }
 
 QString getInstrumentName(Instrument * in) {
@@ -247,6 +254,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
   // Safety check - done after tempo change just in case. 
 	QString safe = checkSafety(cs);
 	if (!safe.isEmpty()) {
+    writeErrorToFile(safe,saveName);
 		qDebug() << safe << endl;
 		return false;
 	}
@@ -275,7 +283,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     int prog = (hb<<16) | ((lb&0xff)<<8) | (pr&0xff);
     qWarning() << "TEST INSTRUMENT" << prog << MidiInstr::instrumentName(MidiType::GM,prog,false);*/
     foreach( Part * part, cs->parts()) {
-      Instrument * in = part->instrument();
+      //Instrument * in = part->instrument();
       foreach( Channel * channel, part->instrument()->channel()) {
         int prog = channel->program;
         if (prog==52 || prog==53 || prog==54) 

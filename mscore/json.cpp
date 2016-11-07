@@ -80,6 +80,7 @@
 namespace Ms {
 
   // From svgc.cpp
+  void writeErrorToFile(QString errorstring, QString ofilename);
   QString checkSafety(Score * score);
   QString getInstrumentName(Instrument * in);
   void createAllExcerpts(Score * score);
@@ -199,6 +200,7 @@ namespace Ms {
 
       QString safe = checkSafety(score);
       if (!safe.isEmpty()) {
+        writeErrorToFile(safe,saveName);
         qDebug() << safe << endl;
         return false;
       }
