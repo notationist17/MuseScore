@@ -234,7 +234,7 @@ void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, 
 
 bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const bool do_linearize, const QString& partsName) {
 
-  cs->setSpatium(5); // = 1.76389mm; SVG export broken for other values
+  //cs->setSpatium(5); // = 1.76389mm; SVG export broken for other values
 
   QJsonObject partsinfo;
   qreal scale_tempo = 1.0;
@@ -666,8 +666,7 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
 
             foreach(const Element * e, elems) {
 
-               if (!e->visible())
-                     continue;
+               // if (!e->visible()) continue; // Flamenco book had noteheads hidden...
 
                if (e->type() == Element::Type::TEMPO_TEXT)
                   continue;
