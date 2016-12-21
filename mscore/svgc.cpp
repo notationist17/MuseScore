@@ -208,9 +208,12 @@ void stretchAudio(Score * score, const QMap<int,qreal>& t2t) {
 void createAudioTrack(QJsonArray plist, Score * cs, const QString& midiname) {
   	// Mute the parts in the current excerpt
     foreach( Part * part, cs->parts()){
-  	  if (!plist.contains(QJsonValue(part->id())))
-      	foreach( Channel * channel, part->instrument()->channel())
-      		channel->mute = true;
+  	  if (!plist.contains(QJsonValue(part->id()))) {
+        const InstrumentList * il = part->instruments();
+        for(auto& iter :  *il)
+        	foreach( Channel * channel, iter.second->channel())
+        		channel->mute = true;
+      }
       //else
       //  qWarning() << "TEST RETURNED TRUE!!!" << endl;
     }
@@ -218,9 +221,12 @@ void createAudioTrack(QJsonArray plist, Score * cs, const QString& midiname) {
     mscore->saveMidi(cs,midiname);
 
     // Unmute all parts
-    foreach( Part * part, cs->parts())
-    	foreach( Channel * channel, part->instrument()->channel())
-    		channel->mute = false;
+    foreach( Part * part, cs->parts()) {
+      const InstrumentList * il = part->instruments();
+      for(auto& iter :  *il)
+    	  foreach( Channel * channel, iter.second->channel())
+    		  channel->mute = false;
+    }
 }
 
 void addFileToZip(MQZipWriter * uz, const QString& filename, const QString & zippath) {
