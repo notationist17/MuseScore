@@ -107,7 +107,7 @@ QString checkSafety(Score * score) {
     qreal endtime = score->tempomap()->tick2time(endTick);
 
     if (endtime>60*20) return QString("Piece lasts too long");
-    if (endtime*nexcerpts>60*80) return QString("Piece lasts too long with parts");
+    if (endtime*nexcerpts>60*120) return QString("Piece lasts too long with parts");
   }
 
   if (score->lastMeasure() == NULL) return QString("Piece has no notes");
@@ -129,26 +129,30 @@ void createAllExcerpts(Score * score) {
   if (score->rootScore()->excerpts().size()>0 ||
       score->parts().size()==1) return;
 
-  score->startCmd();
+  Score * cs = score->rootScore();
+  
+  // From musescore.cpp endsWith(".pdf")
+  QList<Excerpt*> excerpts = Excerpt::createAllExcerpt(cs);
+  foreach(Excerpt* e, excerpts) {
+        Score* nscore = new Score(e->oscore());
+        e->setPartScore(nscore);
+        nscore->setName(e->title()); // needed before AddExcerpt
+        nscore->style()->set(StyleIdx::createMultiMeasureRests, true);
+        cs->startCmd();
+        cs->undo(new AddExcerpt(nscore));
+        createExcerpt(e);
 
-  // Based on things found in excerptsdialog.cpp
-  foreach( Part * part, score->parts()) {
-    Excerpt* e = new Excerpt(score);
-    QString name = part->partName();
-    if (name.isEmpty()) name = getInstrumentName(part->instrument());
-    e->setTitle(name);
-    e->parts().append(part);
-    Score* nscore = new Score(e->oscore());
-    e->setPartScore(nscore);
-    nscore->setName(name); // needed before AddExcerpt
-    nscore->style()->set(StyleIdx::createMultiMeasureRests, true);
-    createExcerpt(e);
-    score->addExcerpt(nscore); // This actually copies the e created before
-    delete e;
-  }
+        // Borrowed from excerptsdialog.cpp
+        // a new excerpt is created in AddExcerpt, make sure the parts are filed
+        for (Excerpt* ee : e->oscore()->excerpts()) {
+            if (ee->partScore() == nscore) {
+                  ee->parts().clear();
+                  ee->parts().append(e->parts());
+                  }
+            }
 
-  score->setExcerptsChanged(true);
-  score->endCmd();
+        cs->endCmd();
+        }
 
   qWarning() << "Created new excerpts:" << score->rootScore()->excerpts().size();
 }
@@ -258,8 +262,11 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
   cs->tempomap()->setRelTempo(scale_tempo);
 
   // Safety check - done after tempo change just in case. 
+
+
 	QString safe = checkSafety(cs);
-	if (!safe.isEmpty()) {
+	if (!safe.isEmpty() && // The input scorefile is too long
+    (partsinfo.isEmpty() || !partsinfo["production"].toBool(false))) { // Not in production mode
     writeErrorToFile(safe,saveName);
 		qDebug() << safe << endl;
 		return false;

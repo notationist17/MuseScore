@@ -80,7 +80,7 @@
 namespace Ms {
 
   // From svgc.cpp
-  void writeErrorToFile(QString errorstring, QString ofilename);
+  //void writeErrorToFile(QString errorstring, QString ofilename);
   QString checkSafety(Score * score);
   QString getInstrumentName(Instrument * in);
   void createAllExcerpts(Score * score);
@@ -198,17 +198,12 @@ namespace Ms {
       qreal rel_tempo = score->tempomap()->relTempo();
       score->tempomap()->setRelTempo(1.0);
 
-      QString safe = checkSafety(score);
-      if (!safe.isEmpty()) {
-        writeErrorToFile(safe,saveName);
-        qDebug() << safe << endl;
-        return false;
-      }
+      //qDebug("LINEARIZE");
 
       // Linearize the score (for getting all the onsets)
       score = mscore->linearize(score, true);
 
-      createAllExcerpts(score);
+      //qDebug("OPEN FILE");
 
       
       QFile file(saveName);
@@ -219,7 +214,7 @@ namespace Ms {
       // List all parts
       QJsonArray p_ar;
       int pi = 1;
-      foreach( Part * part, score->parts()) {
+      foreach( Part * part, score->rootScore()->parts()) {
         part->setId(QString::number(pi++));
 
         QJsonObject pobj = QJsonObject();
@@ -231,9 +226,12 @@ namespace Ms {
       obj["parts"] = p_ar;
 
 
+      //qDebug("CREATE ALL EXCERPTS");
+      createAllExcerpts(score->rootScore());
+
+      //qDebug("LISTING EXCERPTS");
 
       // List all excerpts
-
       QJsonArray e_ar;
       int ei = 0;
 
@@ -272,6 +270,9 @@ namespace Ms {
       }
       obj["excerpts"] = e_ar;
 
+
+      //qDebug("GET ONSETS");
+
       obj["onsets"] = getPartsOnsets(score);
 
       Measure* lastm = score->lastMeasure();
@@ -285,6 +286,10 @@ namespace Ms {
       tso["denominator"] = ts.denominator();
       tso["unit_duration"] = score->tempomap()->tick2time(1920/ts.denominator())-score->tempomap()->tick2time(0); // 480 ticks per quarter note
       obj["timesig"] = tso;
+
+
+      QString safe = checkSafety(score);
+      if (!safe.isEmpty()) obj["score_unsafe"] = safe;
 
       file.write(QJsonDocument(obj).toJson());
       file.close();
