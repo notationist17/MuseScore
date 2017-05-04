@@ -153,6 +153,14 @@ Shortcut Shortcut::_sc[] = {
          Qt::ApplicationShortcut
          },
       {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT,
+         "linearize",
+         QT_TRANSLATE_NOOP("action","Linearize"),
+         QT_TRANSLATE_NOOP("action","Linearize"),
+         QT_TRANSLATE_NOOP("action","Linearize score")
+         },
+      {
          Ms::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY  | STATE_PLAY,
          "print",
