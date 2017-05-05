@@ -674,7 +674,7 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
             QMap<int,qreal> tick2pos;
             QMap<int,int> just_tied; // just the end of tied note
             QMap<int,int> is_rest;
-            QMap<int,int> pitches;
+            QMap<int,QList<int>> pitches;
             tie_ends = mark_tie_ends(elems);
 
             foreach(const Element * e, elems) {
@@ -718,9 +718,11 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
                                   (e->type() == Element::Type::REST));
 
                   Note * note = (Note*)e;
-                  if (e->type() == Element::Type::NOTE && 
-                    (!pitches.contains(tick) || pitches[tick] < note->ppitch()))
-                    pitches.insert(tick,note->ppitch());
+                  if (e->type() == Element::Type::NOTE) {
+                    if (!pitches.contains(tick))
+                      pitches.insert(tick,QList<int>());
+                    pitches[tick].push_back(note->ppitch());
+                  }
 
                   // Update the bounds for actual audio
                   if (e->type() == Element::Type::NOTE) {
@@ -774,6 +776,7 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
             QJsonArray ticks, times, otimes, positions, change, rest, pitches_ar;
 
             bool has_original = orig_t2t.isEmpty();
+            bool is_monophonic = true;
 
             foreach(int tick, tick2pos.keys()){
               ticks.push_back(tick);
@@ -781,7 +784,22 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
               times.push_back(ttime);
               otimes.push_back(has_original?orig_t2t[tick]:ttime);
               positions.push_back(tick2pos[tick]);
-              pitches_ar.push_back(pitches.value(tick,-1));
+
+              // Write midi pitches: number for monophonic, list for chord, -1 for rest
+              // NB! This is for notes that start at this tick. Does not count previous notes fading into this (ongoing notes)
+              if (pitches.contains(tick)) {
+                if (pitches.value(tick).length()==1)
+                  pitches_ar.push_back(pitches.value(tick).first());
+                else {
+                  is_monophonic = false;
+                  QJsonArray pa;
+                  foreach(int pitch,pitches.value(tick)) {
+                    pa.push_back(pitch);
+                  }
+                  pitches_ar.push_back(pa);
+                }
+              } 
+              else pitches_ar.push_back(-1);
 
               change.push_back(int(!(just_tied[tick] || (rest.last().toInt() && is_rest[tick]))));
               rest.push_back(int(is_rest[tick]));
@@ -800,6 +818,8 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
             sobj["otimes"] = otimes;
             sobj["is_change"] = change;
             sobj["is_rest"] = rest;
+
+            sobj["monophonic"] = is_monophonic;
 
             result.push_back(sobj);
          }
