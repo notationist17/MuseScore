@@ -101,6 +101,59 @@ namespace Ms {
       return s_ar;
   }
 
+  // Check if parts have the same notes
+  // This is to handle guitar note+tab so it would not set "multiple" as instrument
+  bool partsAreEqual(Part * p1, Part * p2) {
+
+    Score * cs = p1->score();
+    if (cs!=p2->score()) {
+      qWarning() << "INVALID PARTS COMPARISON";
+      return false;
+    }
+
+    QList<const Element*> elems;
+    foreach( Page* page, cs->pages())
+      foreach( System* sys, *(page->systems()))
+        foreach(MeasureBase *m, sys->measures())
+          m->scanElements(&elems, collectElements, false);
+
+    QList<int> ticks, pitches;
+
+    // Write down all notes in first part
+    foreach(const Element * e, elems) 
+      if (e->type() == Element::Type::NOTE) {
+        ChordRest * cr = (ChordRest*)( ((Note*)e)->chord());
+
+        if (cs->staff(cr->staffIdx())->part()!=p1) continue;
+
+        ticks.push_back(cr->segment()->tick()); 
+        pitches.push_back(((Note*)e)->ppitch());
+      }
+
+    qWarning() << "PARTS COMPARISON SIZE" << ticks.size();
+
+    bool equal = true;
+
+    // Check if they match second part
+    foreach(const Element * e, elems) 
+      if (e->type() == Element::Type::NOTE) {
+        ChordRest * cr = (ChordRest*)( ((Note*)e)->chord());
+
+        if (cs->staff(cr->staffIdx())->part()!=p2) continue;
+
+        equal = equal && ticks.size()>0 &&
+          (ticks.first() == cr->segment()->tick()) &&
+          (pitches.first() == ((Note*)e)->ppitch());
+
+        if (!equal) break;
+
+        ticks.pop_front(); pitches.pop_front();
+      }
+
+
+    return equal;
+  }
+
   QJsonObject getPartsOnsets(Score* score) {
 
     // Collect together all elements belonging to this system!
@@ -244,10 +297,16 @@ namespace Ms {
       eobj["staves"] = stavesToJson(score);
 
       QJsonArray ep_ar;
+
+      Part * p0 = NULL; bool equal = true;
       foreach(Part * part, score->parts()) {
+        if (p0==NULL) p0 = part;
+        else equal = equal && partsAreEqual(p0,part);
+
         ep_ar.append(part->id());
       }
       eobj["parts"] = ep_ar;
+      eobj["parts_equal"] = equal;
 
       e_ar.append(eobj);
 
@@ -260,7 +319,7 @@ namespace Ms {
         eobj["title"] = e->title();
         eobj["staves"] = stavesToJson(e->partScore());
 
-        ep_ar = QJsonArray();
+        ep_ar = QJsonArray(); 
         foreach(Part * part, e->parts().toSet()) {
           ep_ar.append(part->id());
         }
