@@ -289,6 +289,7 @@ namespace Ms {
       int ei = 0;
 
       // Create the "Full" excerpt
+      qWarning() << "FULL PART";
 
       QJsonObject eobj = QJsonObject();
 
@@ -313,17 +314,21 @@ namespace Ms {
       // Create the other excerpt objects
 
       foreach (Excerpt* e, score->rootScore()->excerpts())  {
+        qWarning() << "EXCERPT" << e->title();
         eobj = QJsonObject();
 
         eobj["id"] = QString::number(ei++);
         eobj["title"] = e->title();
         eobj["staves"] = stavesToJson(e->partScore());
 
-        ep_ar = QJsonArray(); 
+        ep_ar = QJsonArray(); p0 = NULL; equal = true;
         foreach(Part * part, e->parts().toSet()) {
+          if (p0==NULL) p0 = part;
+          else equal = equal && partsAreEqual(p0,part);
           ep_ar.append(part->id());
         }
         eobj["parts"] = ep_ar;
+        eobj["parts_equal"] = equal;
 
         e_ar.append(eobj);
       }
