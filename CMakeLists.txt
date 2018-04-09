@@ -123,7 +123,7 @@ option(DOWNLOAD_SOUNDFONT "Download the latest soundfont version as part of the 
 SET(JACK_LONGNAME "jack (jack audio connection kit)")
 SET(JACK_MIN_VERSION "0.98.0")
 option(BUILD_JACK    "Build with support for ${JACK_LONGNAME} audio backend. jack >= ${JACK_MIN_VERSION} will be needed." ON)
-option(BUILD_PULSEAUDIO "Build with support for Pulseaudio audio backend." ON)
+option(BUILD_PULSEAUDIO "Build with support for Pulseaudio audio backend." OFF)
 option(BUILD_ALSA "Build with support for ALSA audio backend." ON)
 option(BUILD_PORTAUDIO "Build with support for Portaudio audio backend." ON)
 option(BUILD_PORTMIDI "Build with support for PortAudio's MIDI features." ${BUILD_PORTAUDIO}) # PortAudio required

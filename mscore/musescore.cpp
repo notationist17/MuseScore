@@ -152,6 +152,7 @@ bool ignoreWarnings = false;
 QString mscoreGlobalShare;
 
 static QString outFileName;
+static QString partsFileName;
 static QString jsonFileName;
 static QString audioDriver;
 static QString pluginName;
@@ -724,7 +725,7 @@ MuseScore::MuseScore()
       for (auto i : {
             "", "file-save", "file-save-as", "file-save-a-copy",
             "file-save-selection", "file-save-online", "file-export", "file-part-export", "file-import-pdf",
-            "", "file-close", "", "parts", "album" }) {
+            "", "linearize", "", "file-close", "", "parts", "album" }) {
             if (!*i)
                   _fileMenu->addSeparator();
             else
@@ -2327,6 +2328,16 @@ static bool doConvert(Score* cs, QString fn, QString plugin = "")
             cs->switchToPageMode();
             rv = mscore->saveSvg(cs, fn);
             }
+      else if (fn.endsWith(".svc")) {
+            rv = mscore->saveSvgCollection(cs, fn, true, partsFileName);
+            }
+      else if (fn.endsWith(".json")) {
+            rv = mscore->getPartsDescriptions(cs, fn);
+            }
+      else if (fn.endsWith(".mld")) {
+            rv = mscore->saveMLData(cs, fn, partsFileName);
+            }
+
 #ifdef HAS_AUDIOFILE
             else if (fn.endsWith(".wav") || fn.endsWith(".ogg") || fn.endsWith(".flac"))
                   return mscore->saveAudio(cs, fn);
@@ -4494,6 +4505,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             newFile();
       else if (cmd == "quit")
             close();
+      else if (cmd == "linearize")
+            newLinearized(cs);
       else if (cmd == "masterpalette")
             showMasterPalette();
       else if (cmd == "key-signatures")
@@ -5431,7 +5444,8 @@ int main(int argc, char* av[])
       parser.addOption(QCommandLineOption({"t", "test-mode"}, "Set test mode flag for all files"));
       parser.addOption(QCommandLineOption({"M", "midi-operations"}, "Specify MIDI import operations file", "file"));
       parser.addOption(QCommandLineOption({"w", "no-webview"}, "No web view in start center"));
-      parser.addOption(QCommandLineOption({"P", "export-score-parts"}, "Used with '-o <file>.pdf', export score and parts"));
+      //parser.addOption(QCommandLineOption({"P", "export-score-parts"}, "Used with '-o <file>.pdf', export score and parts"));
+      parser.addOption(QCommandLineOption({"P", "partsfile"}, "used with -o <file>.{svc|json}","pname"));
       parser.addOption(QCommandLineOption({"f", "force"}, "Used with '-o <file>', ignore warnings reg. score being corrupted or from wrong version"));
       parser.addOption(QCommandLineOption({"b", "bitrate"}, "Used with '-o <file>.mp3', sets bitrate", "bitrate"));
 
@@ -5485,6 +5499,12 @@ int main(int argc, char* av[])
             if (temp.isEmpty())
                    parser.showHelp(EXIT_FAILURE);
             converterDpi = temp.toDouble();
+            }
+      if (parser.isSet("P")) {
+            MScore::noGui = true;
+            partsFileName = parser.value("P");
+            if (partsFileName.isEmpty())
+                  parser.showHelp(EXIT_FAILURE);
             }
       if (parser.isSet("T")) {
             QString temp = parser.value("T");
@@ -5540,9 +5560,9 @@ int main(int argc, char* av[])
             preferences.midiImportOperations.setOperationsFile(temp);
             }
       noWebView = parser.isSet("w");
-      exportScoreParts = parser.isSet("export-score-parts");
-      if (exportScoreParts && !converterMode)
-            parser.showHelp(EXIT_FAILURE);
+      //exportScoreParts = parser.isSet("export-score-parts");
+      //if (exportScoreParts && !converterMode)
+      //      parser.showHelp(EXIT_FAILURE);
       ignoreWarnings = parser.isSet("f");
       if (parser.isSet("b")) {
             QString temp = parser.value("b");
