@@ -103,7 +103,7 @@ QString checkSafety(Score * score) {
 
   if (!score->repeatList()->isEmpty()) {
     RepeatSegment * rs = score->repeatList()->last();
-    int endTick= rs->tick + rs->len;
+    int endTick= rs->tick + rs->len();
     qreal endtime = score->tempomap()->tick2time(endTick);
 
     if (endtime>60*20) return QString("Piece lasts too long");

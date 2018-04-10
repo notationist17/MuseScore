@@ -157,7 +157,7 @@ namespace Ms {
       bool copy=false;
       foreach (const RepeatSegment* rs, *(score->repeatList()) ) {
          int startTick  = rs->tick;
-         int endTick    = startTick + rs->len;
+         int endTick    = startTick + rs->len();
 
          qDebug("Segment %i-%i",startTick,endTick);
 
