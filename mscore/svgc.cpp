@@ -511,17 +511,33 @@ QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems) {
           Chord *beg = (Chord*)span->startElement(), 
                 *end = (Chord*)span->endElement();
 
-          same = beg->type() == Element::Type::CHORD && end->type() == Element::Type::CHORD &&
-                 beg->notes().size() == end->notes().size();
+          qDebug() << "CHECKING IF SLUR IS TIE";
 
-          if (same) {
-            for(int i = 0; i< beg->notes().size(); i++)
-              same = same && (beg->notes()[i]->ppitch() == end->notes()[i]->ppitch());
+          // Check if all the chords in after beg up to end match beg
+          same = true;
+          Element * cur = beg->nextElement(); 
+          while (true) {
+            //qDebug() << "Foud EL" << cur << "FIRST" << first;
+            if (cur->type() == Element::Type::NOTE) {
+              Chord * ch = (Chord*)cur->parent();
+              //qDebug() << "Foud CHORD" << ch;
+
+              same = same && (beg->notes().size() == ch->notes().size());
+
+              if (same) {
+                for(int i = 0; i< beg->notes().size(); i++)
+                  same = same && (beg->notes()[i]->ppitch() == ch->notes()[i]->ppitch());
+              }
+              
+              if (!same || ch==end || ch->tick() > end->tick()) break;
+              else cur = (Element*)ch;
+            }
+            else cur = cur -> nextElement();
           }
         }
 
         if (same) {
-          //qDebug() << "TIE FOUND";
+          qDebug() << "CONVERTING SLUR TO TIE";
           SlurSegment * ss = (SlurSegment *)e;
           res->insert( (ChordRest*)ss->slurTie()->endElement() );
         }
