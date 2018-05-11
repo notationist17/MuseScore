@@ -508,16 +508,19 @@ QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems) {
           // However, Mscore allows a slur to be put 
           // where it actually is a tie, so check
           Spanner * span = ss->spanner();
+
           Chord *beg = (Chord*)span->startElement(), 
                 *end = (Chord*)span->endElement();
 
-          qDebug() << "CHECKING IF SLUR IS TIE";
+          if (beg->type()!= Element::Type::CHORD) continue;
 
           // Check if all the chords in after beg up to end match beg
           same = true;
           Element * cur = beg->nextElement(); 
-          while (true) {
-            //qDebug() << "Foud EL" << cur << "FIRST" << first;
+
+          //qDebug() << "CHECKING IF SLUR IS TIE" << beg << end << cur;
+          while (cur!=NULL) {
+            //qDebug() << "Foud EL" << cur;
             if (cur->type() == Element::Type::NOTE) {
               Chord * ch = (Chord*)cur->parent();
               //qDebug() << "Foud CHORD" << ch;
@@ -544,6 +547,8 @@ QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems) {
         //else qDebug() << "SLUR FOUND";
       }
     }
+
+    qDebug() << "TIES MARKED";
 
     return res;
 }
