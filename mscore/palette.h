@@ -197,6 +197,8 @@ class Palette : public QWidget {
       bool moreElements() const      { return _moreElements; }
       void setMoreElements(bool val);
 
+      QString getCellName(int idx) const { return cells[idx]->name; }
+
       virtual int heightForWidth(int) const;
       virtual QSize sizeHint() const;
       };

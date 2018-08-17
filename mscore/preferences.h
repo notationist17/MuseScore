@@ -121,6 +121,7 @@ struct Preferences {
       int portMidiOutputLatencyMilliseconds;
 
       bool antialiasedDrawing;
+      bool limitScrollArea;
       SessionStart sessionStart;
       QString startScore;
       QString defaultStyleFile;
@@ -153,6 +154,7 @@ struct Preferences {
 
       //update
       bool checkUpdateStartup;
+      bool checkExtensionsUpdateStartup;
 
       bool followSong;
       QString importCharsetOve;
@@ -174,6 +176,7 @@ struct Preferences {
       QString myTemplatesPath;
       QString myPluginsPath;
       QString mySoundfontsPath;
+      QString myExtensionsPath;
 
       bool nativeDialogs;
 

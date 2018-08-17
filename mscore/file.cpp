@@ -73,6 +73,7 @@
 #include "synthesizer/msynthesizer.h"
 #include "svggenerator.h"
 #include "scorePreview.h"
+#include "extension.h"
 
 #ifdef OMR
 #include "omr/omr.h"
@@ -432,7 +433,7 @@ bool MuseScore::saveFile(Score* score)
             return false;
             }
       score->setCreated(false);
-      setWindowTitle(QString(MUSESCORE_NAME_VERSION) + ": " + score->name());
+      updateWindowTitle(score);
       int idx = scoreList.indexOf(score);
       tab1->setTabText(idx, score->name());
       if (tab2)
@@ -480,8 +481,9 @@ QString MuseScore::createDefaultName() const
 
 void MuseScore::updateNewWizard()
       {
-      if (newWizard != 0)
+      if (newWizard == nullptr)
             newWizard = new NewWizard(this);
+      newWizard->updateValues();
       }
 
 //---------------------------------------------------------
@@ -491,8 +493,7 @@ void MuseScore::updateNewWizard()
 
 void MuseScore::newFile()
       {
-      if (newWizard == 0)
-            newWizard = new NewWizard(this);
+      updateNewWizard();
       newWizard->restart();
       if (newWizard->exec() != QDialog::Accepted)
             return;
@@ -1852,7 +1853,7 @@ bool MuseScore::saveAs(Score* cs, bool saveCopy, const QString& path, const QStr
 
             if (rv && !saveCopy) {
                   cs->fileInfo()->setFile(fn);
-                  setWindowTitle(QString(MUSESCORE_NAME_VERSION) + ": " + cs->name());
+                  updateWindowTitle(cs);
                   cs->undo()->setClean();
                   dirtyChanged(cs);
                   cs->setCreated(false);
@@ -2088,6 +2089,15 @@ void importSoundfont(QString name)
       }
 
 //---------------------------------------------------------
+//   importExtension
+//---------------------------------------------------------
+
+void importExtension(QString name)
+      {
+      mscore->importExtension(name);
+      }
+
+//---------------------------------------------------------
 //   readScore
 ///   Import file \a name
 //---------------------------------------------------------
@@ -2110,6 +2120,10 @@ Score::FileError readScore(Score* score, QString name, bool ignoreVersionError)
             importSoundfont(name);
             return Score::FileError::FILE_IGNORE_ERROR;
             }
+      else if (suffix == "muxt") {
+           importExtension(name);
+           return Score::FileError::FILE_IGNORE_ERROR;
+           }
       else {
             // typedef Score::FileError (*ImportFunction)(Score*, const QString&);
             struct ImportDef {

@@ -126,6 +126,7 @@ void Preferences::init()
       portMidiOutputLatencyMilliseconds = 0;
 
       antialiasedDrawing       = true;
+      limitScrollArea          = false;
       sessionStart             = SessionStart::SCORE;
       startScore               = ":/data/My_First_Score.mscz";
       defaultStyleFile         = "";
@@ -159,8 +160,10 @@ void Preferences::init()
 
 #if defined(Q_OS_MAC) || (defined(Q_OS_WIN) && !defined(FOR_WINSTORE))
       checkUpdateStartup      = true;
+      checkExtensionsUpdateStartup = true;
 #else
       checkUpdateStartup      = false;
+      checkExtensionsUpdateStartup = false;
 #endif
 
       followSong              = true;
@@ -189,6 +192,7 @@ void Preferences::init()
       myTemplatesPath = QFileInfo(QString("%1/%2").arg(wd).arg(QCoreApplication::translate("templates_directory",  "Templates"))).absoluteFilePath();
       myPluginsPath   = QFileInfo(QString("%1/%2").arg(wd).arg(QCoreApplication::translate("plugins_directory",    "Plugins"))).absoluteFilePath();
       mySoundfontsPath = QFileInfo(QString("%1/%2").arg(wd).arg(QCoreApplication::translate("soundfonts_directory", "Soundfonts"))).absoluteFilePath();
+      myExtensionsPath = QFileInfo(QString("%1/%2").arg(wd).arg(QCoreApplication::translate("extensions_directory", "Extensions"))).absoluteFilePath();
 
       MScore::setNudgeStep(.1);         // cursor key (default 0.1)
       MScore::setNudgeStep10(1.0);      // Ctrl + cursor key (default 1.0)
@@ -268,6 +272,7 @@ void Preferences::write()
       s.setValue("layoutBreakColor",   MScore::layoutBreakColor.name(QColor::NameFormat::HexArgb));
       s.setValue("frameMarginColor",   MScore::frameMarginColor.name(QColor::NameFormat::HexArgb));
       s.setValue("antialiasedDrawing", antialiasedDrawing);
+      s.setValue("limitScrollArea",    limitScrollArea);
       switch(sessionStart) {
             case SessionStart::EMPTY:  s.setValue("sessionStart", "empty"); break;
             case SessionStart::LAST:   s.setValue("sessionStart", "last"); break;
@@ -329,6 +334,7 @@ void Preferences::write()
       s.setValue("myTemplatesPath", myTemplatesPath);
       s.setValue("myPluginsPath", myPluginsPath);
       s.setValue("mySoundfontsPath", mySoundfontsPath);
+      s.setValue("myExtensionsPath", myExtensionsPath);
       s.remove("sfPath");
 
       s.setValue("hraster", MScore::hRaster());
@@ -343,6 +349,7 @@ void Preferences::write()
 
       //update
       s.setValue("checkUpdateStartup", checkUpdateStartup);
+      s.setValue("checkExtensionsUpdateStartup", checkExtensionsUpdateStartup);
 
       s.setValue("useMidiRemote", useMidiRemote);
       for (int i = 0; i < MIDI_REMOTES; ++i) {
@@ -436,6 +443,7 @@ void Preferences::read()
       MScore::layoutBreakColor   = readColor("layoutBreakColor", MScore::layoutBreakColor);
       MScore::frameMarginColor   = readColor("frameMarginColor", MScore::frameMarginColor);
       antialiasedDrawing      = s.value("antialiasedDrawing", antialiasedDrawing).toBool();
+      limitScrollArea         = s.value("limitScrollArea", limitScrollArea).toBool();
 
       defaultStyleFile         = s.value("defaultStyle", defaultStyleFile).toString();
 
@@ -494,6 +502,7 @@ void Preferences::read()
       pl.removeAll(QFileInfo(QString("%1%2").arg(mscoreGlobalShare).arg("sound")).absoluteFilePath());
       mySoundfontsPath = pl.join(";");
       mySoundfontsPath = s.value("mySoundfontsPath", mySoundfontsPath).toString();
+      myExtensionsPath = s.value("myExtensionsPath",    myExtensionsPath).toString();
 
       //Create directories if they are missing
       QDir dir;
@@ -504,6 +513,7 @@ void Preferences::read()
       dir.mkpath(myPluginsPath);
       foreach (QString path, mySoundfontsPath.split(";"))
             dir.mkpath(path);
+      dir.mkpath(myExtensionsPath);
 
       MScore::setHRaster(s.value("hraster", MScore::hRaster()).toInt());
       MScore::setVRaster(s.value("vraster", MScore::vRaster()).toInt());
@@ -517,6 +527,7 @@ void Preferences::read()
       MScore::setVerticalOrientation(s.value("verticalPageOrientation", MScore::verticalOrientation()).toBool());
 
       checkUpdateStartup = s.value("checkUpdateStartup", checkUpdateStartup).toBool();
+      checkExtensionsUpdateStartup = s.value("checkExtensionsUpdateStartup", checkExtensionsUpdateStartup).toBool();
 
       QString ss(s.value("sessionStart", "score").toString());
       if (ss == "last")
@@ -593,6 +604,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       myPluginsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       mySoundfontsButton->setIcon(*icons[int(Icons::edit_ICON)]);
       myImagesButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
+      myExtensionsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
 
       bgWallpaperSelect->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       fgWallpaperSelect->setIcon(*icons[int(Icons::fileOpen_ICON)]);
@@ -687,6 +699,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       connect(myPluginsButton, SIGNAL(clicked()), SLOT(selectPluginsDirectory()));
       connect(myImagesButton, SIGNAL(clicked()), SLOT(selectImagesDirectory()));
       connect(mySoundfontsButton, SIGNAL(clicked()), SLOT(changeSoundfontPaths()));
+      connect(myExtensionsButton, SIGNAL(clicked()), SLOT(selectExtensionsDirectory()));
 
       connect(updateTranslation, SIGNAL(clicked()), SLOT(updateTranslationClicked()));
 
@@ -886,6 +899,7 @@ void PreferenceDialog::updateValues()
 
       //Update
       checkUpdateStartup->setChecked(prefs.checkUpdateStartup);
+      checkExtensionsUpdateStartup->setChecked(prefs.checkExtensionsUpdateStartup);
 
       navigatorShow->setChecked(prefs.showNavigator);
       playPanelShow->setChecked(prefs.showPlayPanel);
@@ -910,6 +924,7 @@ void PreferenceDialog::updateValues()
 
       alsaFragments->setValue(prefs.alsaFragments);
       drawAntialiased->setChecked(prefs.antialiasedDrawing);
+      limitScrollArea->setChecked(prefs.limitScrollArea);
       switch(prefs.sessionStart) {
             case SessionStart::EMPTY:  emptySession->setChecked(true); break;
             case SessionStart::LAST:   lastSession->setChecked(true); break;
@@ -1077,6 +1092,7 @@ void PreferenceDialog::updateValues()
       myTemplates->setText(prefs.myTemplatesPath);
       myPlugins->setText(prefs.myPluginsPath);
       mySoundfonts->setText(prefs.mySoundfontsPath);
+      myExtensions->setText(prefs.myExtensionsPath);
 
       index = exportAudioSampleRate->findData(prefs.exportAudioSampleRate);
       exportAudioSampleRate->setCurrentIndex(index);
@@ -1393,6 +1409,7 @@ void PreferenceDialog::apply()
       prefs.showStartcenter    = showStartcenter->isChecked();
 
       prefs.antialiasedDrawing = drawAntialiased->isChecked();
+      prefs.limitScrollArea    = limitScrollArea->isChecked();
 
       prefs.useJackTransport   = jackDriver->isChecked() && useJackTransport->isChecked();
       prefs.jackTimebaseMaster = becomeTimebaseMaster->isChecked();
@@ -1489,6 +1506,7 @@ void PreferenceDialog::apply()
       prefs.myTemplatesPath    = myTemplates->text();
       prefs.myPluginsPath      = myPlugins->text();
       prefs.mySoundfontsPath = mySoundfonts->text();
+      prefs.myExtensionsPath = myExtensions->text();
 
       prefs.exportAudioSampleRate = exportAudioSampleRate->currentData().toInt();
       prefs.exportMp3BitRate   = exportMp3BitRate->currentData().toInt();
@@ -1547,6 +1565,7 @@ void PreferenceDialog::apply()
 
       //update
       prefs.checkUpdateStartup = checkUpdateStartup->isChecked();
+      prefs.checkExtensionsUpdateStartup = checkExtensionsUpdateStartup->isChecked();
 
       prefs.mag         = scale->value()/100.0;
 
@@ -1806,6 +1825,22 @@ void PreferenceDialog::selectImagesDirectory()
       }
 
 //---------------------------------------------------------
+//   selectExtensionsDirectory
+//---------------------------------------------------------
+
+void PreferenceDialog::selectExtensionsDirectory()
+      {
+      QString s = QFileDialog::getExistingDirectory(
+         this,
+         tr("Choose Extensions Folder"),
+         myExtensions->text(),
+         QFileDialog::ShowDirsOnly | (preferences.nativeDialogs ? QFileDialog::Options() : QFileDialog::DontUseNativeDialog)
+         );
+      if (!s.isNull())
+            myExtensions->setText(s);
+      }
+
+//---------------------------------------------------------
 //   changeSoundfontPaths
 //---------------------------------------------------------
 
@@ -1825,6 +1860,7 @@ void PreferenceDialog::changeSoundfontPaths()
 void PreferenceDialog::updateTranslationClicked()
       {
       ResourceManager r(0);
+      r.selectLanguagesTab();
       r.exec();
       }
 

@@ -77,8 +77,15 @@ void TextLineSegment::draw(QPainter* painter) const
 
       // color for line (text color comes from the text properties)
       QColor color;
-      if ((selected() && !(score() && score()->printing())) || !tl->visible() || !tl->lineVisible())
+      if ((selected() && !(score() && score()->printing())) || !tl->visible() || !tl->lineVisible()) {
             color = curColor();
+            if (tl->visible() && !tl->lineVisible()) {
+                  if (selected())
+                        color = color.lighter(200);
+                  else
+                        color = Qt::gray;
+                  }
+            }
       else
             color = tl->lineColor();
 
@@ -296,7 +303,10 @@ void TextLineSegment::layout1()
       bbox().setRect(x1, y1, x2 - x1, y2 - y1);
       // set end text position and extend bbox
       if (_endText) {
-            _endText->setPos(bbox().right(), 0);
+            // Set _endText's position horizontally related to the dimensions of the previously formed rectangle.
+            // Previously, this was performed while 'zeroing' the vertical alignment, hence the bug of
+            // non-effect regarding the user-defined end-text's vertical alignment
+            _endText->setUserXoffset(bbox().right());
             bbox() |= _endText->bbox().translated(_endText->pos());
             }
       }

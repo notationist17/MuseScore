@@ -1786,7 +1786,7 @@ Shortcut Shortcut::_sc[] = {
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT | STATE_PLAY,
          "toggle-selection-window",
          QT_TRANSLATE_NOOP("action","Selection Filter"),
-         QT_TRANSLATE_NOOP("action","Toogle 'Selection Filter'"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Selection Filter'"),
          0,
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut
@@ -1831,7 +1831,7 @@ Shortcut Shortcut::_sc[] = {
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-fileoperations",
          QT_TRANSLATE_NOOP("action","File Operations"),
-         QT_TRANSLATE_NOOP("action","Toogle 'File Operations' toolbar")
+         QT_TRANSLATE_NOOP("action","Toggle 'File Operations' toolbar")
          },
       {
          MsWidget::MAIN_WINDOW,
@@ -1859,7 +1859,7 @@ Shortcut Shortcut::_sc[] = {
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-noteinput",
          QT_TRANSLATE_NOOP("action","Note Input"),
-         QT_TRANSLATE_NOOP("action","Toogle 'Note Input' toolbar")
+         QT_TRANSLATE_NOOP("action","Toggle 'Note Input' toolbar")
          },
       {
          MsWidget::MAIN_WINDOW,
@@ -2088,7 +2088,7 @@ Shortcut Shortcut::_sc[] = {
          "pan",
          QT_TRANSLATE_NOOP("action","Pan Score"),
          QT_TRANSLATE_NOOP("action","Toggle 'Pan Score'"),
-         QT_TRANSLATE_NOOP("action","Pan score during playback"),
+         QT_TRANSLATE_NOOP("action","Pan score automatically"),
          Icons::pan_ICON,
          Qt::WindowShortcut,
          ShortcutFlags::A_SCORE | ShortcutFlags::A_CHECKABLE | ShortcutFlags::A_CHECKED

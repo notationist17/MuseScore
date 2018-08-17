@@ -388,9 +388,8 @@ static void initDrumset(Drumset* drumset, const MusicXMLDrumset& mxmlDrumset)
             //qDebug("initDrumset: instrument: %s %s", qPrintable(ii.key()), qPrintable(ii.value().toString()));
             int pitch = ii.value().pitch;
             if (0 <= pitch && pitch <= 127) {
-                  drumset->drum(ii.value().pitch)
-                        = DrumInstrument(ii.value().name.toLatin1().constData(),
-                                         ii.value().notehead, ii.value().line, ii.value().stemDirection);
+                  drumset->addDrumInstrument(ii.value().pitch, DrumInstrument(ii.value().name.toLatin1().constData(),
+                                         ii.value().notehead, ii.value().line, ii.value().stemDirection));
                   }
             }
       }
@@ -2160,7 +2159,7 @@ void MusicXMLParserPass2::attributes(const QString& partId, Measure* measure, co
 static void setStaffLines(Score* score, int staffIdx, int stafflines)
       {
       score->staff(staffIdx)->setLines(stafflines);
-      score->staff(staffIdx)->setBarLineTo(0);        // default
+      score->staff(staffIdx)->setBarLineTo((stafflines - 1) * 2);
       }
 
 //---------------------------------------------------------
@@ -4125,7 +4124,7 @@ Note* MusicXMLParserPass2::note(const QString& partId,
       bool graceSlash = false;
       bool printObject = _e.attributes().value("print-object") != "no";
       Beam::Mode bm  = Beam::Mode::AUTO;
-      QString instrId;
+      QString instrumentId;
 
       mxmlNoteDuration mnd(_divs, _logger);
       mxmlNotePitch mnp(_logger);
@@ -4153,7 +4152,7 @@ Note* MusicXMLParserPass2::note(const QString& partId,
                   _e.readNext();
                   }
             else if (_e.name() == "instrument") {
-                  instrId = _e.attributes().value("id").toString();
+                  instrumentId = _e.attributes().value("id").toString();
                   _e.readNext();
                   }
             else if (_e.name() == "notehead") {
@@ -4338,11 +4337,11 @@ Note* MusicXMLParserPass2::note(const QString& partId,
             if (mnp.unpitched()) {
                   //&& drumsets.contains(partId)
                   if (_hasDrumset
-                      && mxmlDrumset.contains(instrId)) {
+                      && mxmlDrumset.contains(instrumentId)) {
                         // step and oct are display-step and ...-oct
                         // get pitch from instrument definition in drumset instead
-                        int pitch = mxmlDrumset[instrId].pitch;
-                        note->setPitch(pitch);
+                        int pitch = mxmlDrumset[instrumentId].pitch;
+                        note->setPitch(limit(pitch, 0, 127));
                         // TODO - does this need to be key-aware?
                         note->setTpc(pitch2tpc(pitch, Key::C, Prefer::NEAREST)); // TODO: necessary ?
                         }
@@ -4394,7 +4393,7 @@ Note* MusicXMLParserPass2::note(const QString& partId,
                   }
                    */
                   // this should be done in pass 1, would make _pass1 const here
-                  _pass1.setDrumsetDefault(partId, instrId, headGroup, line, stemDir);
+                  _pass1.setDrumsetDefault(partId, instrumentId, headGroup, line, stemDir);
                   }
 
             // accidental handling
@@ -4469,16 +4468,18 @@ Note* MusicXMLParserPass2::note(const QString& partId,
       if (grace && lastGraceAFter)
             gac = gcl.size();
 
-      if (!chord && !grace) {
-            // do tuplet if valid time-modification is not 1/1 and is not 1/2 (tremolo)
-            auto timeMod = mnd.timeMod();
-            if (timeMod.isValid() && timeMod != Fraction(1, 1) && timeMod != Fraction(1, 2)) {
-                  // find part-relative track
-                  Part* part = _pass1.getPart(partId);
-                  Q_ASSERT(part);
-                  int scoreRelStaff = _score->staffIdx(part); // zero-based number of parts first staff in the score
-                  int partRelTrack = msTrack + msVoice - scoreRelStaff * VOICES;
-                  addTupletToChord(cr, _tuplets[partRelTrack], _tuplImpls[partRelTrack], timeMod, tupletDesc, mnd.normalType());
+      if (cr) {
+            if (!chord && !grace) {
+                  // do tuplet if valid time-modification is not 1/1 and is not 1/2 (tremolo)
+                  auto timeMod = mnd.timeMod();
+                  if (timeMod.isValid() && timeMod != Fraction(1, 1) && timeMod != Fraction(1, 2)) {
+                        // find part-relative track
+                        Part* part = _pass1.getPart(partId);
+                        Q_ASSERT(part);
+                        int scoreRelStaff = _score->staffIdx(part); // zero-based number of parts first staff in the score
+                        int partRelTrack = msTrack + msVoice - scoreRelStaff * VOICES;
+                        addTupletToChord(cr, _tuplets[partRelTrack], _tuplImpls[partRelTrack], timeMod, tupletDesc, mnd.normalType());
+                        }
                   }
             }
 

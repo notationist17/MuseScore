@@ -424,10 +424,7 @@ void Chord::add(Element* e)
                         }
                   if (!found)
                         _notes.append(note);
-                  if (note->tieFor()) {
-                        if (note->tieFor()->endNote())
-                              note->tieFor()->endNote()->setTieBack(note->tieFor());
-                        }
+                  note->connectTiedNotes();
                   if (voice() && measure() && note->visible())
                         measure()->mstaff(staffIdx())->hasVoices = true;
                   }
@@ -504,10 +501,7 @@ void Chord::remove(Element* e)
                   {
                   Note* note = static_cast<Note*>(e);
                   if (_notes.removeOne(note)) {
-                        if (note->tieFor()) {
-                              if (note->tieFor()->endNote())
-                                    note->tieFor()->endNote()->setTieBack(0);
-                              }
+                        note->disconnectTiedNotes();
                         for (Spanner* s : note->spannerBack()) {
                               note->removeSpannerBack(s);
                               }
@@ -734,7 +728,8 @@ void Chord::addLedgerLines()
 
                   // check if note horiz. pos. is outside current range
                   // if more length on the right, increase range
-                  x = note->pos().x();
+                  // ledger lines need the leftmost point of the notehead with a respect of bbox
+                  x = note->pos().x() + note->bboxXShift();
                   if (x-extraLen < minX) {
                         minX  = x - extraLen;
 //                        minXr = minX - extraLen;
@@ -1154,10 +1149,9 @@ qreal Chord::centerX() const
             return staff()->staffType()->chordStemPosX(this) * spatium();
 
       const Note* note = up() ? upNote() : downNote();
-      qreal x = note->pos().x();
-      x += note->headWidth() * .5;
+      qreal x = note->pos().x() + note->noteheadCenterX();
       if (note->mirror()) {
-            x += note->headWidth() * (up() ? -1.0 : 1.0);
+            x += note->headBodyWidth() * (up() ? -1.0 : 1.0);
             }
       return x;
       }
@@ -1817,6 +1811,10 @@ void Chord::layoutPitched()
                   }
             computeUp();
             layoutStem();
+            if (_stem) { //false when dragging notes from drum palette
+                  qreal stemWidth5 = _stem->lineWidth() * .5;
+                  _stem->rxpos()   = up() ? (upNote()->headBodyWidth() - stemWidth5) : stemWidth5;
+                  }
             addLedgerLines();
             for (LedgerLine* ll = _ledgerLines; ll; ll = ll->next())
                   ll->layout();
@@ -1872,10 +1870,10 @@ void Chord::layoutPitched()
                               if (sc->notes().size() > 1) {
                                     // some notes may be further to the right than start note
                                     // allow overlap with those notes to count toward the minimum
-                                    qreal snEnd = sn->x() + sn->headWidth();
+                                    qreal snEnd = sn->x() + sn->bboxRightPos();
                                     qreal scEnd = snEnd;
                                     for (Note* n : sc->notes())
-                                          scEnd = qMax(scEnd, n->x() + n->headWidth());
+                                          scEnd = qMax(scEnd, n->x() + n->bboxRightPos());
                                     overlap += scEnd - snEnd;
                                     }
                               }
@@ -2798,9 +2796,9 @@ QPointF Chord::layoutArticulation(Articulation* a)
                   }
             if (!staff()->isTabStaff() && !alignToStem) {
                   if (up())
-                        pos.rx() -= upNote()->headWidth() * .5;   // move half-a-note-head to left
+                        pos.rx() -= upNote()->headBodyWidth() * .5;   // move half-a-note-head to left
                   else
-                        pos.rx() += upNote()->headWidth() * .5;   // move half-a-note-head to right
+                        pos.rx() += upNote()->headBodyWidth() * .5;   // move half-a-note-head to right
                   }
             a->setPos(pos);
             a->adjustReadPos();

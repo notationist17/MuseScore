@@ -578,7 +578,8 @@ void Measure::layout2()
                         smn = system()->firstMeasure() == this;
                   else {
                         smn = (_no == 0 && score()->styleB(StyleIdx::showMeasureNumberOne)) ||
-                              ( ((_no+1) % score()->style(StyleIdx::measureNumberInterval).toInt()) == 0 );
+                              ( ((_no + 1) % score()->style(StyleIdx::measureNumberInterval).toInt()) == (score()->styleB(StyleIdx::showMeasureNumberOne) ? 1 : 0) ) ||
+                              (score()->style(StyleIdx::measureNumberInterval).toInt() == 1);
                         }
                   }
             }
@@ -975,11 +976,25 @@ void Measure::spatiumChanged(qreal /*oldValue*/, qreal /*newValue*/)
 
 void Measure::moveTicks(int diff)
       {
+      std::set<Tuplet*> tuplets;
       setTick(tick() + diff);
       for (Segment* segment = first(); segment; segment = segment->next()) {
             if (segment->segmentType() & (Segment::Type::EndBarLine | Segment::Type::TimeSigAnnounce))
                   segment->setTick(tick() + ticks());
+            else if (segment->isChordRest())
+                  // Tuplet ticks are stored as absolute ticks, so they must be adjusted.
+                  // But each tuplet must only be adjusted once.
+                  for (Element* e : segment->elist())
+                        if (e && e->isChordRest()) {
+                              ChordRest* cr = static_cast<ChordRest*>(e);
+                              Tuplet* tuplet = cr->tuplet();
+                              if (tuplet && tuplets.count(tuplet) == 0) {
+                                    tuplet->setTick(tuplet->tick() + diff);
+                                    tuplets.insert(tuplet);
+                                    }
+                              }
             }
+      tuplets.clear();
       }
 
 //---------------------------------------------------------
@@ -1606,7 +1621,7 @@ void Measure::adjustToLen(Fraction nf, bool appendRestsIfNecessary)
                               }
                         }
                   }
-            Fraction stretch = score()->staff(staffIdx)->timeStretch(tick());
+            Fraction stretch = s->staff(staffIdx)->timeStretch(tick());
             // if just a single rest
             if (rests == 1 && chords == 0) {
                   // if measure value didn't change, stick to whole measure rest
@@ -1862,7 +1877,7 @@ void Measure::read(XmlReader& e, int staffIdx)
                               // be reconstructed from measure flags
                               bool endBarLineGenerated = (blt == BarLineType::NORMAL || blt == BarLineType::END_REPEAT
                                     || blt == BarLineType::END_START_REPEAT || blt == BarLineType::START_REPEAT);
-                              setEndBarLineType(blt, endBarLineGenerated, true);
+                              setEndBarLineType(blt, barLine->el()->empty() && endBarLineGenerated, true);
                               }
                         if (!barLine->customSpan()) {
                               Staff* staff = score()->staff(staffIdx);
@@ -3115,7 +3130,7 @@ qreal Measure::minWidth1() const
                   }
             _minWidth1 = score()->computeMinWidth(s, false);
             if (MScore::debugMode)
-                  qDebug("Measure::minWidth1: %d %f", no(), _minWidth1 / DPMM);
+                  qDebug("Measure::minWidth1: %d %f", no(), _minWidth1);
             }
       return _minWidth1;
       }

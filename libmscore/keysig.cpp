@@ -105,8 +105,18 @@ void KeySig::layout()
 
       // determine current clef for this staff
       ClefType clef = ClefType::G;
-      if (staff())
-            clef = staff()->clef(segment()->tick());
+      if (staff()) {
+            // Look for a clef before the key signature at the same tick
+            Clef* c = nullptr;
+            for (Segment* seg = segment()->prev1(); !c && seg && seg->tick() == segment()->tick(); seg = seg->prev1())
+                  if (seg->segmentType() == Segment::Type::Clef)
+                        c = static_cast<Clef*>(seg->element(track()));
+            if (c)
+                  clef = c->clefType();
+            else
+                  // no clef found, so get the clef type from the clefs list, using the previous tick
+                  clef = staff()->clef(segment()->tick() - 1);
+            }
 
       int accidentals = 0, naturals = 0;
       int t1 = int(_sig.key());
@@ -130,7 +140,7 @@ void KeySig::layout()
       // OR key sig is CMaj/Amin (in which case they are always shown)
 
       Measure* m           = measure();
-      Measure* prevMeasure = m ? m->prevMeasure() : nullptr;
+      Measure* prevMeasure = m ? m->prevMeasureMM() : nullptr;
 
       // display of naturals defaults according to style
       bool naturalsOn = score()->styleI(StyleIdx::keySigNaturals) != int(KeySigNatural::NONE) || t1 == 0;

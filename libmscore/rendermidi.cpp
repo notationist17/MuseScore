@@ -761,17 +761,40 @@ bool Score::isSubdivided(ChordRest* chord, int swingUnit)
             return false;
       }
 
+const Drumset* getDrumset(const Chord* chord)
+      {
+      if (chord->staff() && chord->staff()->isDrumStaff()) {
+            const Drumset* ds = chord->staff()->part()->instrument(chord->tick())->drumset();
+            return ds;
+            }
+      return nullptr;
+      }
+
 //---------------------------------------------------------
 //   renderTremolo
 //---------------------------------------------------------
 
-void renderTremolo(Chord *chord, QList<NoteEventList> & ell)
+void renderTremolo(Chord* chord, QList<NoteEventList>& ell)
       {
       Segment* seg = chord->segment();
       Tremolo* tremolo = chord->tremolo();
       int notes = chord->notes().size();
-      //int n = 1 << tremolo->lines();
-      //int l = 1000 / n;
+
+      // check if tremolo was rendered before for drum staff
+      const Drumset* ds = getDrumset(chord);
+      if (ds) {
+            for (Note* n : chord->notes()) {
+                  DrumInstrumentVariant div = ds->findVariant(n->pitch(), chord->articulations(), chord->tremolo());
+                  if (div.pitch != INVALID_PITCH && div.tremolo == tremolo->tremoloType())
+                        return; // already rendered
+                  }
+            }
+
+      // we cannot render buzz roll with MIDI events only
+      if (tremolo->tremoloType() == TremoloType::BUZZ_ROLL)
+            return;
+
+      // render tremolo with multiple events
       if (chord->tremoloChordType() == TremoloChordType::TremoloFirstNote) {
             int t = MScore::division / (1 << (tremolo->lines() + chord->durationType().hooks()));
             Segment::Type st = Segment::Type::ChordRest;
@@ -1417,7 +1440,16 @@ static QList<NoteEventList> renderChord(Chord* chord, int gateTime, int ontime)
 void Score::createGraceNotesPlayEvents(QList<Chord*> gnb, int tick, Chord* chord, int &ontime)
       {
       int n = gnb.size();
-      if (n) {
+      int graceDuration = 0;
+      bool drumset = (getDrumset(chord) != nullptr);
+      const qreal ticksPerSecond = tempo(tick) * MScore::division;
+      const qreal chordTimeMS = (chord->actualTicks() / ticksPerSecond) * 1000;
+      if (drumset) {
+            int flamDuration = 15; //ms
+            graceDuration = flamDuration / chordTimeMS * 1000; //ratio 1/1000 from the main note length
+            ontime = graceDuration * n;
+            }
+      else if (n) {
             //
             //  render grace notes:
             //  simplified implementation:
@@ -1429,11 +1461,8 @@ void Score::createGraceNotesPlayEvents(QList<Chord*> gnb, int tick, Chord* chord
             //
             Chord* graceChord = gnb[0];
             if (graceChord->noteType() ==  NoteType::ACCIACCATURA) {
-                  qreal ticksPerSecond = tempo(tick) * MScore::division;
                   int graceTimeMS = 65 * n;     // value determined empirically (TODO: make instrument-specific, like articulations)
-                  // 1000 occurs below for two different reasons:
-                  // number of milliseconds per second, also unit for ontime
-                  qreal chordTimeMS = (chord->actualTicks() / ticksPerSecond) * 1000;
+                  // 1000 occurs below as a unit for ontime
                   ontime = qMin(500, static_cast<int>((graceTimeMS / chordTimeMS) * 1000));
                   }
             else if (chord->dots() == 1)
@@ -1443,27 +1472,27 @@ void Score::createGraceNotesPlayEvents(QList<Chord*> gnb, int tick, Chord* chord
             else
                   ontime = 500;
 
-            int graceDuration = ontime / n;
+            graceDuration = ontime / n;
+            }
 
-            int on = 0;
-            for (int i = 0; i < n; ++i) {
-                  QList<NoteEventList> el;
-                  Chord* gc = gnb.at(i);
-                  int nn = gc->notes().size();
-                  for (int ii = 0; ii < nn; ++ii) {
-                        NoteEventList nel;
-                        nel.append(NoteEvent(0, on, graceDuration));
-                        el.append(nel);
-                        }
-
-                  if (gc->playEventType() == PlayEventType::InvalidUser)
-                        gc->score()->undo(new ChangeEventList(gc, el));
-                  else if (gc->playEventType() == PlayEventType::Auto) {
-                        for (int ii = 0; ii < nn; ++ii)
-                              gc->notes()[ii]->setPlayEvents(el[ii]);
-                        }
-                  on += graceDuration;
+      int on = 0;
+      for (int i = 0; i < n; ++i) {
+            QList<NoteEventList> el;
+            Chord* gc = gnb.at(i);
+            int nn = gc->notes().size();
+            for (int ii = 0; ii < nn; ++ii) {
+                  NoteEventList nel;
+                  nel.append(NoteEvent(0, on, graceDuration));
+                  el.append(nel);
                   }
+
+            if (gc->playEventType() == PlayEventType::InvalidUser)
+                  gc->score()->undo(new ChangeEventList(gc, el));
+            else if (gc->playEventType() == PlayEventType::Auto) {
+                  for (int ii = 0; ii < nn; ++ii)
+                        gc->notes()[ii]->setPlayEvents(el[ii]);
+                  }
+            on += graceDuration;
             }
       }
 

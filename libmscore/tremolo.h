@@ -22,7 +22,8 @@ namespace Ms {
 class Chord;
 
 // Tremolo subtypes:
-enum class TremoloType : char {
+enum class TremoloType : signed char {
+      INVALID_TREMOLO = -1,
       OLD_R8 = 0,
       OLD_R16,
       OLD_R32,
@@ -30,7 +31,7 @@ enum class TremoloType : char {
       OLD_C16,
       OLD_C32,
 
-      R8=6, R16, R32, R64,  // one note tremolo (repeat)
+      R8=6, R16, R32, R64, BUZZ_ROLL,  // one note tremolo (repeat)
       C8, C16, C32, C64     // two note tremolo (change)
       };
 
@@ -62,6 +63,8 @@ class Tremolo : public Element {
 
       void setTremoloType(TremoloType t);
       TremoloType tremoloType() const      { return _tremoloType; }
+      static TremoloType name2Type(const QString& s);
+      static QString type2name(TremoloType t);
 
       virtual qreal mag() const;
       virtual void draw(QPainter*) const;
@@ -77,7 +80,7 @@ class Tremolo : public Element {
             _chord2 = c2;
             }
       Fraction tremoloLen() const;
-      bool twoNotes() const { return tremoloType() > TremoloType::R64; } // is it a two note tremolo?
+      bool twoNotes() const { return tremoloType() >= TremoloType::C8; } // is it a two note tremolo?
       int lines() const { return _lines; }
 
       virtual QString accessibleInfo() override;

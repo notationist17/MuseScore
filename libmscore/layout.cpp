@@ -609,7 +609,7 @@ qreal Score::layoutChords2(QList<Note*>& notes, bool up)
 
             // accumulate return value
             if (!mirror)
-                  maxWidth = qMax(maxWidth, note->headWidth());
+                  maxWidth = qMax(maxWidth, note->bboxRightPos());
 
             // prepare for next iteration
             lvisible      = note->visible();
@@ -827,16 +827,13 @@ void Score::layoutChords3(QList<Note*>& notes, Staff* staff, Segment* segment)
                   ++nAcc;
                   }
 
-            qreal hw     = note->headWidth();   // actual head width, including note & chord mag
             Chord* chord = note->chord();
             bool _up     = chord->up();
-            qreal stemX  = chord->stemPosX();   // stem position for nominal notehead, but allowing for mag
-
             qreal overlapMirror;
             if (chord->stem()) {
                   qreal stemWidth = chord->stem()->lineWidth();
                   qreal stemWidth5 = stemWidth * 0.5;
-                  chord->stem()->rxpos() = _up ? stemX - stemWidth5 : stemWidth5;
+                  chord->stem()->rxpos() = _up ? chord->stemPosX() - stemWidth5 : stemWidth5;
                   overlapMirror = stemWidth;
                   }
             else if (chord->durationType().headType() == NoteHead::Type::HEAD_WHOLE)
@@ -844,19 +841,15 @@ void Score::layoutChords3(QList<Note*>& notes, Staff* staff, Segment* segment)
             else
                   overlapMirror = 0.0;
 
-            qreal x;
+            qreal x = 0.0;
             if (note->mirror()) {
                   if (_up)
-                        x = stemX - overlapMirror;
+                        x = chord->stemPosX() - overlapMirror;
                   else
-                        x = stemX - hw + overlapMirror;
+                        x = -note->headBodyWidth() + overlapMirror;
                   }
-            else {
-                  if (_up)
-                        x = stemX - hw;
-                  else
-                        x = 0.0;
-                  }
+            else if (_up)
+                  x = chord->stemPosX() - note->headBodyWidth();
 
             note->rypos()  = (note->line() + stepOffset) * stepDistance;
             note->rxpos()  = x;
@@ -877,13 +870,15 @@ void Score::layoutChords3(QList<Note*>& notes, Staff* staff, Segment* segment)
             //if (chord->stem())
             //      chord->stem()->rxpos() = _up ? x + hw - stemWidth5 : x + stemWidth5;
 
-            qreal xx = x + hw + chord->pos().x();
+            qreal xx = x + note->headBodyWidth() + chord->pos().x();
 
             if (chord->dots()) {
                   if (chord->up())
                         upDotPosX = qMax(upDotPosX, xx);
-                  else
+                  else {
                         downDotPosX = qMax(downDotPosX, xx);
+                        }
+
                   MScore::Direction dotPosition = note->userDotPosition();
 
                   if (dotPosition == MScore::Direction::AUTO && nNotes > 1 && note->visible() && !note->dotsHidden()) {
@@ -929,6 +924,11 @@ void Score::layoutChords3(QList<Note*>& notes, Staff* staff, Segment* segment)
                   note->setDotY(dotPosition);
                   }
             }
+
+      // if there are no non-mirrored notes in a downstem chord,
+      // then use the stem X position as X origin for accidental layout
+      if (nNotes && leftNotes.size() == nNotes)
+            lx = notes.front()->chord()->stemPosX();
 
       if (segment) {
             // align all dots for segment/staff
@@ -2166,6 +2166,7 @@ qreal Score::cautionaryWidth(Measure* m, bool& hasCourtesy)
             for (int staffIdx = 0; staffIdx < _staves.size(); ++staffIdx) {
                   int track = staffIdx * VOICES;
 
+                  // the real key signature in the next measure, if present
                   KeySig* nks = static_cast<KeySig*>(ns->element(track));
 
                   if (nks && nks->showCourtesy() && !nks->generated()) {
@@ -2184,14 +2185,23 @@ qreal Score::cautionaryWidth(Measure* m, bool& hasCourtesy)
                                      }
                                }
 
+                        // the courtesy key signature in this measure, if present
                         Segment* s  = m->findSegment(Segment::Type::KeySigAnnounce, tick);
 
                         if (s && s->element(track)) {
+                              // use width of existing courtesy key signature
                               wwMax = qMax(wwMax, s->element(track)->width() + leftMargin);
                               hasCourtesy = true;
                               }
                         else {
+                              // no courtesy key sig present
+                              // use width of real key signature in next measure
+                              // but make sure naturals are generated for us if appropriate
+                              // just as if this were a courtesy key signature
+                              bool saveCourtesy = nks->showCourtesy();
+                              nks->setShowCourtesy(false);
                               nks->layout();
+                              nks->setShowCourtesy(saveCourtesy);
                               wwMax = qMax(wwMax, nks->width() + leftMargin);
                               //hasCourtesy = false;
                               }

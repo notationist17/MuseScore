@@ -82,7 +82,7 @@ include (CreatePrecompiledHeader)
 
 set (CMAKE_AUTOMOC TRUE)
 
-set(MSCORE_UNSTABLE  FALSE)          # mark as unstable
+set(MSCORE_UNSTABLE FALSE)          # mark as unstable
 
 set(USE_SSE           TRUE)
 set(SCRIPT_INTERFACE  TRUE)
@@ -159,13 +159,13 @@ if (APPLE)
 endif (APPLE)
 
 #
-#     Check for gcc compiler >= 4.7
+#     Check for gcc compiler >= 4.8
 #
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
       if (${CMAKE_CXX_COMPILER_MAJOR} LESS 4
-        OR ((${CMAKE_CXX_COMPILER_MAJOR} EQUAL 4) AND (${CMAKE_CXX_COMPILER_MINOR} LESS 7)))
+        OR ((${CMAKE_CXX_COMPILER_MAJOR} EQUAL 4) AND (${CMAKE_CXX_COMPILER_MINOR} LESS 8)))
             message(FATAL_ERROR "bad gcc compiler version " ${CMAKE_CXX_COMPILER_VERSION}
-                  " >= 4.7 required")
+                  " >= 4.8 required")
       endif()
 endif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
 
@@ -193,8 +193,8 @@ set(CMAKE_SKIP_RULE_DEPENDENCY TRUE)
 # The Mscore version number.
 SET(MUSESCORE_NAME "MuseScore")
 SET(MUSESCORE_VERSION_MAJOR  "2")
-SET(MUSESCORE_VERSION_MINOR  "2")
-SET(MUSESCORE_VERSION_PATCH  "0")
+SET(MUSESCORE_VERSION_MINOR  "3")
+SET(MUSESCORE_VERSION_PATCH  "2")
 SET(MUSESCORE_VERSION       "${MUSESCORE_VERSION_MAJOR}.${MUSESCORE_VERSION_MINOR}")
 SET(MUSESCORE_NAME_VERSION "${MUSESCORE_NAME} ${MUSESCORE_VERSION_MAJOR}")
 #
@@ -651,7 +651,7 @@ subdirs(
       effects thirdparty/rtf2html thirdparty/diff thirdparty/beatroot
       thirdparty/xmlstream thirdparty/qzip thirdparty/kQOAuth
       )
-string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
+string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE)
 if (APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
 #with xcode, we need to have all the targets in the same project
 add_subdirectory(mtest)

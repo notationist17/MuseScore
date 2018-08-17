@@ -52,7 +52,10 @@ void MasterSynthesizer::init()
             else
                   e.unknown();
             }
-      setState(state);
+      if (!setState(state)) {
+            f.remove();
+            setState(defaultState);
+            }
       }
 
 //---------------------------------------------------------
@@ -362,6 +365,24 @@ SynthesizerState MasterSynthesizer::state() const
       if (_effect[1])
             ss.push_back(_effect[1]->state());
       return ss;
+      }
+
+//---------------------------------------------------------
+//   storeState
+//---------------------------------------------------------
+
+bool MasterSynthesizer::storeState()
+      {
+      QString s(dataPath + "/synthesizer.xml");
+      QFile f(s);
+      if (!f.open(QIODevice::WriteOnly)) {
+            qDebug("cannot write synthesizer settings <%s>", qPrintable(s));
+            return false;
+            }
+      Xml xml(&f);
+      xml.header();
+      state().write(xml);
+      return true;
       }
 
 //---------------------------------------------------------

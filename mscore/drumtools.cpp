@@ -51,14 +51,25 @@ DrumTools::DrumTools(QWidget* parent)
 
       QWidget* w = new QWidget(this);
       w->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed));
+      w->setMaximumHeight(100);
       QHBoxLayout* layout = new QHBoxLayout;
       w->setLayout(layout);
 
       QVBoxLayout* layout1 = new QVBoxLayout;
+      layout1->setSpacing(6);
+      pitchName = new QLabel;
+      pitchName->setAlignment(Qt::AlignCenter);
+      pitchName->setWordWrap(true);
+      pitchName->setContentsMargins(25, 10, 25, 10);
+      layout1->addWidget(pitchName);
+      QHBoxLayout* buttonLayout = new QHBoxLayout;
+      buttonLayout->setContentsMargins(25, 10, 25, 10);
       QToolButton* tb = new QToolButton;
       tb->setText(tr("Edit Drumset"));
-      layout1->addWidget(tb);
-      layout1->addStretch();
+      tb->setMinimumWidth(100);
+      tb->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed));
+      buttonLayout->addWidget(tb);
+      layout1->addLayout(buttonLayout);
       layout->addLayout(layout1);
 
       drumPalette = new Palette;
@@ -71,7 +82,6 @@ DrumTools::DrumTools(QWidget* parent)
       layout->addWidget(sa);
 
       setWidget(w);
-//      setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed));
 
       w = new QWidget(this);
       setTitleBarWidget(w);
@@ -79,6 +89,8 @@ DrumTools::DrumTools(QWidget* parent)
       connect(tb, SIGNAL(clicked()), SLOT(editDrumset()));
       void boxClicked(int);
       connect(drumPalette, SIGNAL(boxClicked(int)), SLOT(drumNoteSelected(int)));
+
+      drumPalette->setContextMenuPolicy(Qt::PreventContextMenu);
       }
 
 //---------------------------------------------------------
@@ -92,14 +104,16 @@ void DrumTools::updateDrumset(const Drumset* ds)
       if (!drumset)
             return;
       double _spatium = gscore->spatium();
-      for (int pitch = 0; pitch < 128; ++pitch) {
-            if (!drumset->isValid(pitch))
+      const auto d = ds->drumsByIndex();
+      for (int n = 0; n < DRUM_INSTRUMENTS; ++n) {
+            DrumInstrument di = d[n];
+            if (!drumset->isValid(di.pitch))
                   continue;
             bool up;
-            int line      = drumset->line(pitch);
-            NoteHead::Group noteHead  = drumset->noteHead(pitch);
-            int voice     = drumset->voice(pitch);
-            MScore::Direction dir = drumset->stemDirection(pitch);
+            int line      = di.line;
+            NoteHead::Group noteHead  = di.notehead;
+            int voice     = di.voice;
+            MScore::Direction dir = di.stemDirection;
             if (dir == MScore::Direction::UP)
                   up = true;
             else if (dir == MScore::Direction::DOWN)
@@ -115,21 +129,28 @@ void DrumTools::updateDrumset(const Drumset* ds)
             Note* note = new Note(gscore);
             note->setParent(chord);
             note->setTrack(voice);
-            note->setPitch(pitch);
+            note->setPitch(di.pitch);
             note->setTpcFromPitch();
             note->setLine(line);
             note->setPos(0.0, _spatium * .5 * line);
             note->setHeadGroup(noteHead);
+            SymId noteheadSym = SymId::noteheadBlack;
+            if (noteHead == NoteHead::Group::HEAD_CUSTOM)
+                  noteheadSym = drumset->noteHeads(di.pitch, NoteHead::Type::HEAD_QUARTER);
+            else
+                  noteheadSym = note->noteHead(true, di.notehead, NoteHead::Type::HEAD_QUARTER);
+
+            note->setCachedNoteheadSym(noteheadSym); // we use the cached notehead so we don't recompute it at each layout
             chord->add(note);
             Stem* stem = new Stem(gscore);
             stem->setLen((up ? -3.0 : 3.0) * _spatium);
             chord->add(stem);
             stem->setPos(chord->stemPos());
-            int sc = drumset->shortcut(pitch);
+            int sc = di.shortcut;
             QString shortcut;
             if (sc)
                   shortcut = QChar(sc);
-            drumPalette->append(chord, qApp->translate("drumset", drumset->name(pitch).toLatin1().data()), shortcut);
+            drumPalette->append(chord, qApp->translate("drumset", drumset->name(di.pitch).toUtf8().data()), shortcut);
             }
       }
 
@@ -187,6 +208,8 @@ void DrumTools::drumNoteSelected(int val)
             getAction("voice-2")->setChecked(element->voice() == 1);
             getAction("voice-3")->setChecked(element->voice() == 2);
             getAction("voice-4")->setChecked(element->voice() == 3);
+
+            pitchName->setText(drumPalette->getCellName(val));
             }
       }
 
@@ -199,6 +222,7 @@ int DrumTools::selectedDrumNote()
       if (element && element->type() == Element::Type::CHORD) {
             Chord* ch  = static_cast<Chord*>(element);
             Note* note = ch->downNote();
+            pitchName->setText(drumPalette->getCellName(idx));
             return note->pitch();
             }
       else {

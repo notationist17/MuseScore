@@ -1,6 +1,6 @@
 @echo off
 
-rem "compare" - image magick compare program
+rem "magick compare" - image magick compare program
 
 set SRC=mmrest-1,bravura-mmrest,gonville-mmrest,mmrest-2,mmrest-4,mmrest-5,mmrest-6,mmrest-7,mmrest-8,mmrest-9, ^
  mmrest-10,fmrest-1,fmrest-2,fmrest-3,fmrest-4,fmrest-5,fmrest-6,measure-repeat-1, ^
@@ -15,8 +15,9 @@ set SRC=mmrest-1,bravura-mmrest,gonville-mmrest,mmrest-2,mmrest-4,mmrest-5,mmres
  frametext,ottava,slurs-1,slurs-2,slurs-3,slurs-4,hairpins-1,pedal-1,line-1,line-2,line-3,line-4,line-5,gliss-1,gliss-2, ^
  chord-layout-1,chord-layout-2,chord-layout-3,chord-layout-4,chord-layout-5, ^
  chord-layout-6,chord-layout-7,chord-layout-8,chord-layout-9,chord-layout-10, ^
- chord-layout-11,chord-layout-12,chord-layout-13,chord-layout-14,chord-layout-15,chord-layout-16,cross-1,cross-2, ^
- accidental-1,accidental-2,accidental-3,accidental-4,accidental-5, ^
+ chord-layout-11,chord-layout-12,chord-layout-13,chord-layout-14,chord-layout-15,chord-layout-16,chord-layout-17, ^
+ cross-1,cross-2, ^
+ accidental-1,accidental-2,accidental-3,accidental-4,accidental-5, accidental-mirror ^
  accidental-6,accidental-7,accidental-8,accidental-9,accidental-10, ^
  tie-1,tie-2,tie-3,grace-1,grace-2,grace-3,grace-4,tuplets-1,tuplets-2,breath-1, ^
  harmony-1,harmony-2,harmony-3,harmony-4,harmony-5,harmony-6,harmony-7, ^
@@ -48,7 +49,7 @@ echo {}] >> %JSON_FILE%
 
 FOR /D %%a IN (%SRC%) DO (
       xcopy ..\%%a-ref.png . /Q > nul
-      compare %%a-1.png %%a-ref.png %%a-diff.png
+      magick compare %%a-1.png %%a-ref.png %%a-diff.png
 )
 
 xcopy ..\style.css . /Q > nul

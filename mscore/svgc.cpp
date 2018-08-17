@@ -242,7 +242,7 @@ void addFileToZip(MQZipWriter * uz, const QString& filename, const QString & zip
 
 void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, const QMap<int,qreal>& t2t, const qreal t0);
 
-bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const bool do_linearize, const QString& partsName) {
+bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const bool do_linearize, const QString& partsName, bool durationChecks) {
 
   //cs->setSpatium(5); // = 1.76389mm; SVG export broken for other values
 
@@ -264,13 +264,15 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
   // Safety check - done after tempo change just in case. 
 
 
-	QString safe = checkSafety(cs);
-	if (!safe.isEmpty() && // The input scorefile is too long
-    (partsinfo.isEmpty() || !partsinfo["production"].toBool(false))) { // Not in production mode
-    writeErrorToFile(safe,saveName);
-		qDebug() << safe << endl;
-		return false;
-	}
+  if (durationChecks) {
+  	QString safe = checkSafety(cs);
+  	if (!safe.isEmpty() && // The input scorefile is too long
+      (partsinfo.isEmpty() || !partsinfo["production"].toBool(false))) { // Not in production mode
+      writeErrorToFile(safe,saveName);
+  		qDebug() << safe << endl;
+  		return false;
+  	}
+  }
 
   QMap<int,qreal> tick2time, orig_t2t; // latter is bypassed, if empty!
 

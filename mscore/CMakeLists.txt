@@ -291,6 +291,7 @@ add_executable ( ${ExecutableName}
       logindialog.cpp loginmanager.cpp uploadscoredialog.cpp breaksdialog.cpp searchComboBox.cpp
       help.cpp help.h
       toolbuttonmenu.cpp
+      extension.cpp extension.h
 
       ${COCOABRIDGE}
       ${OMR_FILES}
@@ -381,7 +382,7 @@ if (MINGW)
             ${PROJECT_BINARY_DIR}/resfile.o
             PROPERTIES generated true
             )
-      string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
+      string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE)
       # Windows: add -mconsole to LINK_FLAGS to get a console window for debug output
       if (CMAKE_BUILD_TYPE MATCHES "DEBUG")
             set_target_properties(mscore

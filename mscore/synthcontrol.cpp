@@ -169,6 +169,7 @@ void MuseScore::showSynthControl(bool val)
                   connect(synthControl, SIGNAL(soundFontChanged()), mixer, SLOT(patchListChanged()));
             connect(synthControl, SIGNAL(metronomeGainChanged(float)), seq, SLOT(setMetronomeGain(float)));
             }
+      synthControl->updateGui();
       synthControl->setVisible(val);
       }
 
@@ -218,6 +219,16 @@ void SynthControl::setMeter(float l, float r, float left_peak, float right_peak)
       {
       gain->setMeterVal(0, l, left_peak);
       gain->setMeterVal(1, r, right_peak);
+      }
+
+//---------------------------------------------------------
+//   setScore
+//---------------------------------------------------------
+void SynthControl::setScore(Score* s) {
+      _score = s;
+
+      loadButton->setEnabled(true);
+      saveButton->setEnabled(true);
       }
 
 //---------------------------------------------------------
@@ -335,16 +346,7 @@ void SynthControl::storeButtonClicked()
             qDebug("no score");
             return;
             }
-      QString s(dataPath + "/synthesizer.xml");
-      QFile f(s);
-      if (!f.open(QIODevice::WriteOnly)) {
-            qDebug("cannot write synthesizer settings <%s>", qPrintable(s));
-            return;
-            }
-      Xml xml(&f);
-      xml.header();
-      synti->state().write(xml);
-
+      synti->storeState();
       storeButton->setEnabled(false);
       recallButton->setEnabled(false);
       }

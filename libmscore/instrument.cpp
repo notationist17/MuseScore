@@ -259,6 +259,7 @@ void Instrument::read(XmlReader& e)
       int volume  = 100;
       int pan     = 60;
       bool customDrumset = false;
+      int drumsetIndex = 0;
 
       _channel.clear();       // remove default channel
       while (e.readNextStartElement()) {
@@ -313,10 +314,11 @@ void Instrument::read(XmlReader& e)
                   if (!_drumset)
                         _drumset = new Drumset(*smDrumset);
                   if (!customDrumset) {
-                        const_cast<Drumset*>(_drumset)->clear();
+                        _drumset->clear();
                         customDrumset = true;
                         }
-                  const_cast<Drumset*>(_drumset)->load(e);
+                  _drumset->load(e, drumsetIndex);
+                  drumsetIndex++;
                   }
             // support tag "Tablature" for a while for compatibility with existent 2.0 scores
             else if (tag == "Tablature" || tag == "StringData")
@@ -380,7 +382,7 @@ void Instrument::read(XmlReader& e)
             _channel.append(a);
             }
       if (_useDrumset) {
-            if (_channel[0]->bank == 0)
+            if (_channel[0]->bank == 0 && _channel[0]->synti.toLower() != "zerberus")
                   _channel[0]->bank = 128;
             _channel[0]->updateInitList();
             }
@@ -550,6 +552,9 @@ void Channel::read(XmlReader& e)
             else
                   e.unknown();
             }
+      if (128 == bank && "zerberus" == synti.toLower())
+            bank = 0;
+
       updateInitList();
       }
 
