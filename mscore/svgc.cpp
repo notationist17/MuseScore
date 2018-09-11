@@ -323,7 +323,18 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
       saveMidi(cs,tname);
       addFileToZip(&uz, tname, tname);
 
-    	createSvgCollection(&uz, cs, QString("0/"), orig_t2t, 0.0);
+      int ei = 0, t0 = 0.0;
+      QString prefix = QString::number(ei++)+'/';
+      createSvgCollection(&uz, cs, prefix, orig_t2t ,t0);
+      //createSvgCollection(&uz, cs, QString("0/"), orig_t2t, 0.0);
+
+      /*foreach (Excerpt* e, thisScore->excerpts())  {
+        Score * tScore = e->partScore();
+        //qWarning() << "SVC: CREATING PART" << ei;
+
+        prefix = QString::number(ei++)+'/';
+        createSvgCollection(&uz, tScore, prefix, orig_t2t, t0);
+      }*/
     }
     else {
 
@@ -562,6 +573,8 @@ qreal * find_margins(Score * score) {
     foreach( Page* page, score->pages() ) {
       foreach( System* sys, *(page->systems()) ) {
 
+        if (sys->isVbox()) continue; // Skip vboxes like the heading
+
         QRectF sys_rect = sys->pageBoundingRect();
         qreal sys_top = sys_rect.top();
         qreal sys_bot = sys_rect.bottom();
@@ -594,7 +607,7 @@ qreal * find_margins(Score * score) {
           }
         }
     
-        //qDebug() << sys_top-max_top << " " << max_bot-sys_bot << endl;
+        qDebug() << "MARGINS " << sys_top-max_top << " " << max_bot-sys_bot << endl;
 
         if (sys_top-max_top>max_tm) max_tm = sys_top-max_top;
         if (max_bot-sys_bot>max_bm) max_bm = max_bot-sys_bot;
@@ -639,9 +652,10 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
       int nsystems = 0;
       foreach( Page* page, score->pages() )
          foreach( System* sys, *(page->systems()) ) {
-            if (!sys->isVbox()) nsystems++; // Skip vboxes like the heading
+            if (sys->isVbox()) continue; // Skip vboxes like the heading
             qreal cur_w = sys->pageBoundingRect().width();
             if (cur_w>max_w) max_w = cur_w;
+            nsystems++; 
         }
 
       // Stretch the only system to the end by adding a hbox
@@ -655,8 +669,8 @@ QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& ori
             QJsonObject sobj;
 
             QRectF sys_rect = sys->pageBoundingRect();
-            //w = sys_rect.width() + 2*h_margin;
             w = max_w + 2*h_margin; // Make systems uniform width
+
             h = sys_rect.height() + top_margin + bot_margin;
 
             //if (sys_rect.width()>max_w) w = sys_rect.width(); // Make sure vboxes are not cropped
