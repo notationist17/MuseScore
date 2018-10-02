@@ -532,6 +532,7 @@ QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems) {
           Element * cur = beg->nextElement(); 
 
           //qDebug() << "CHECKING IF SLUR IS TIE" << beg << end << cur;
+          int count = 0;
           while (cur!=NULL) {
             //qDebug() << "Foud EL" << cur;
             if (cur->type() == Element::Type::NOTE) {
@@ -549,7 +550,10 @@ QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems) {
               else cur = (Element*)ch;
             }
             else cur = cur -> nextElement();
+
+            count += 1; if (count>1000) { same=false; break; }; // Safety against infloop
           }
+          //qDebug() << "WHILE EXITED";
         }
 
         if (same) {
