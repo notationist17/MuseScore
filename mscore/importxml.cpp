@@ -225,7 +225,7 @@ static Score::FileError doValidateAndImport(Score* score, const QString& name, Q
 
 
       // validate the file
-      Score::FileError res;
+      Score::FileError res = Score::FileError::FILE_NO_ERROR;
       // Validation is really f***ing slow.
       /*res = doValidate(name, dev);
       if (res != Score::FileError::FILE_NO_ERROR)
