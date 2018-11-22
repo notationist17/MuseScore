@@ -303,6 +303,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
         int prog = channel->program;
         if (prog==52 || prog==53 || prog==54) 
           channel->program = 85; // Solo vox
+        if (prog=25) channel->program = 24; // Steel guitar -> Nylon guitar because of bug with rests
       };
       //qWarning() << "TRACK NAME " << in->trackName()
       //  << MidiInstr::instrumentName(MidiType::GM,in->channel(0)->program,in->useDrumset());
