@@ -209,7 +209,7 @@ void stretchAudio(Score * score, const QMap<int,qreal>& t2t) {
   }
 }
 
-void createAudioTrack(QJsonArray plist, Score * cs, const QString& midiname) {
+void createAudioTrack(QJsonArray plist, Score * cs, const QString& afilename) {
   	// Mute the parts in the current excerpt
     foreach( Part * part, cs->parts()){
   	  if (!plist.contains(QJsonValue(part->id()))) {
@@ -222,7 +222,7 @@ void createAudioTrack(QJsonArray plist, Score * cs, const QString& midiname) {
       //  qWarning() << "TEST RETURNED TRUE!!!" << endl;
     }
 
-    mscore->saveMidi(cs,midiname);
+    mscore->saveAudio(cs,afilename);
 
     // Unmute all parts
     foreach( Part * part, cs->parts()) {
@@ -319,9 +319,9 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     		staff->setStaffType(StaffType::preset(StaffTypes::TAB_6COMMON));
     	*/
 
-      // Add midifile
-      QString tname("1.mid");
-      saveMidi(cs,tname);
+      // Add audiofile
+      QString tname("1.wav");
+      saveAudio(cs,tname);
       addFileToZip(&uz, tname, tname);
 
       int ei = 0, t0 = 0.0;
@@ -381,7 +381,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
         QJsonObject atobj = atracks[key].toObject();
 
         if (atobj["synthesize"].toBool()) {
-          QString tname = key + ".mid";
+          QString tname = key + ".wav";
           createAudioTrack(atobj["parts"].toArray(),cs,tname);
           addFileToZip(&uz, tname, tname);
         }
