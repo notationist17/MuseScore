@@ -223,12 +223,12 @@ void createAudioTrack(QJsonArray plist, Score * cs, const QString& afilename) {
       //  qWarning() << "TEST RETURNED TRUE!!!" << endl;
     }
 
-    QFile afile(afilename);
-    //afile.open(QIODevice::WriteOnly);
-    // dummy callback function that will be used if there is no gui
-    std::function<bool(float)> progressCallback = [](float) {return true;};
-    mscore->saveAudio(cs,&afile,progressCallback);
-    //afile.close();
+    // Raw file writing
+    //QFile afile(afilename);
+    //std::function<bool(float)> progressCallback = [](float) {return true;};
+    //mscore->saveAudio(cs,&afile,progressCallback);
+
+    mscore->saveAudio(cs,afilename);
 
     // Unmute all parts
     foreach( Part * part, cs->parts()) {
@@ -328,7 +328,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     	*/
 
       // Add audiofile
-      QString tname("1.raw");
+      QString tname("1.wav");
       saveAudio(cs,tname);
       addFileToZip(&uz, tname, tname);
 
@@ -389,7 +389,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
         QJsonObject atobj = atracks[key].toObject();
 
         if (atobj["synthesize"].toBool()) {
-          QString tname = key + ".raw";
+          QString tname = key + ".wav";
           createAudioTrack(atobj["parts"].toArray(),cs,tname);
           addFileToZip(&uz, tname, tname);
         }
