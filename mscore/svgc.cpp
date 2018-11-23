@@ -70,6 +70,7 @@
 #include "libmscore/measurebase.h"
 
 #include "importmidi/importmidi_instrument.h"
+#include "preferences.h"
 
 #include "libmscore/chordlist.h"
 #include "libmscore/mscore.h"
@@ -222,7 +223,12 @@ void createAudioTrack(QJsonArray plist, Score * cs, const QString& afilename) {
       //  qWarning() << "TEST RETURNED TRUE!!!" << endl;
     }
 
-    mscore->saveAudio(cs,afilename);
+    QFile afile(afilename);
+    //afile.open(QIODevice::WriteOnly);
+    // dummy callback function that will be used if there is no gui
+    std::function<bool(float)> progressCallback = [](float) {return true;};
+    mscore->saveAudio(cs,&afile,progressCallback);
+    //afile.close();
 
     // Unmute all parts
     foreach( Part * part, cs->parts()) {
@@ -257,6 +263,8 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     if (partsinfo.contains("scale_tempo"))
       scale_tempo = partsinfo["scale_tempo"].toDouble();
   }
+
+  preferences.exportAudioSampleRate = 22050;
 
   //qreal rel_tempo = cs->tempomap()->relTempo();
   cs->tempomap()->setRelTempo(scale_tempo);
@@ -320,7 +328,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     	*/
 
       // Add audiofile
-      QString tname("1.wav");
+      QString tname("1.raw");
       saveAudio(cs,tname);
       addFileToZip(&uz, tname, tname);
 
@@ -381,7 +389,7 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
         QJsonObject atobj = atracks[key].toObject();
 
         if (atobj["synthesize"].toBool()) {
-          QString tname = key + ".wav";
+          QString tname = key + ".raw";
           createAudioTrack(atobj["parts"].toArray(),cs,tname);
           addFileToZip(&uz, tname, tname);
         }
