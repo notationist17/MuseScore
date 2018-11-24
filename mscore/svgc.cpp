@@ -64,6 +64,7 @@
 #include "libmscore/sym.h"
 #include "libmscore/image.h"
 #include "synthesizer/msynthesizer.h"
+#include "libmscore/synthesizerstate.h"
 #include "svggenerator.h"
 #include "libmscore/tiemap.h"
 #include "libmscore/tie.h"
@@ -246,6 +247,32 @@ void addFileToZip(MQZipWriter * uz, const QString& filename, const QString & zip
     file.remove();
 }
 
+void setSynthSettings(Score * cs) {  
+    // Set sample rate
+    preferences.exportAudioSampleRate = 22050;
+
+    // Find the master settings group
+    SynthesizerGroup * sg = NULL; // Get a proper pointer
+    for (SynthesizerGroup& g : cs->synthesizerState())
+      if (g.name() == "master") { sg = &g; break; }
+
+    // If no master group, create it from defaults
+    if (sg==NULL) {
+      cs->synthesizerState().push_back(defaultState.front());
+      sg = &(cs->synthesizerState().back());
+    }
+
+    // Set both effect blocks to 'no effect'
+    qWarning() << "Setting synth effects to no effect";
+    for(IdValue & idv : *sg) {
+      qWarning() << "SG Values" << idv.id << idv.data;
+      if (idv.id==0 || idv.id==1) idv.data = "NoEffect";
+    }
+
+    //for(IdValue idv: cs->synthesizerState().group("master"))
+    //  qWarning() << "Synth Master Values" << idv.id << idv.data;
+}
+
 void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, const QMap<int,qreal>& t2t, const qreal t0);
 
 bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const bool do_linearize, const QString& partsName, bool durationChecks) {
@@ -263,8 +290,6 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
     if (partsinfo.contains("scale_tempo"))
       scale_tempo = partsinfo["scale_tempo"].toDouble();
   }
-
-  preferences.exportAudioSampleRate = 22050;
 
   //qreal rel_tempo = cs->tempomap()->relTempo();
   cs->tempomap()->setRelTempo(scale_tempo);
@@ -317,6 +342,8 @@ bool MuseScore::saveSvgCollection(Score * cs, const QString& saveName, const boo
       //qWarning() << "TRACK NAME " << in->trackName()
       //  << MidiInstr::instrumentName(MidiType::GM,in->channel(0)->program,in->useDrumset());
     }
+
+    setSynthSettings(cs);
 
     Score* thisScore = cs->rootScore();
     if (partsinfo.isEmpty()) {
