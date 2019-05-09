@@ -225,12 +225,12 @@ static Score::FileError doValidateAndImport(Score* score, const QString& name, Q
 
       // validate the file
       Score::FileError res;
-      res = doValidate(name, dev);
+      /*res = doValidate(name, dev);
       if (res != Score::FileError::FILE_NO_ERROR)
-            return res;
+            return res;*/
 
       // actually do the import
-      importMusicXMLfromBuffer(score, name, dev);
+      res = importMusicXMLfromBuffer(score, name, dev);
       //qDebug("importMusicXml() return %d", int(res));
       return res;
       }
