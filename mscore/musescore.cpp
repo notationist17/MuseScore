@@ -194,6 +194,9 @@ static QString styleFile;
 static QString extensionName;
 static bool scoresOnCommandline { false };
 
+static bool durationChecks = true;
+static QString partsFileName;
+
 static QList<QTranslator*> translatorList;
 
 QString localeName;
@@ -3508,6 +3511,17 @@ static bool doConvert(Score *cs, const QString& fn)
             }
       else if (fn.endsWith(".svg"))
             return mscore->saveSvg(cs, fn);
+
+      else if (fn.endsWith(".svc")) {
+            return mscore->saveSvgCollection(cs->masterScore(), fn, true, partsFileName, durationChecks);
+            }
+      else if (fn.endsWith(".json")) {
+            return mscore->getPartsDescriptions(cs->masterScore(), fn);
+            }
+      else if (fn.endsWith(".mld")) {
+            return mscore->saveMLData(cs->masterScore(), fn, partsFileName);
+            }
+
 #ifdef HAS_AUDIOFILE
       else if (fn.endsWith(".wav") || fn.endsWith(".ogg") || fn.endsWith(".flac"))
             return mscore->saveAudio(cs, fn);
@@ -7137,6 +7151,11 @@ int main(int argc, char* av[])
       parser.addOption(QCommandLineOption("run-test-script", "Run script tests listed in the command line arguments"));
       parser.addOption(QCommandLineOption({"M", "midi-operations"}, "Specify MIDI import operations file", "file"));
       parser.addOption(QCommandLineOption({"w", "no-webview"}, "No web view in start center"));
+      parser.addOption(QCommandLineOption(      "export-score-parts", "Used with '-o <file>.pdf', export score and parts"));
+
+      parser.addOption(QCommandLineOption({"P", "partsfile"}, "used with -o <file>.{svc|json}","pname"));
+      parser.addOption(QCommandLineOption({"N", "no-duration-checks"}, "used with -o <file>.svc to disable duration checks"));
+
       parser.addOption(QCommandLineOption({"P", "export-score-parts"}, "Used with '-o <file>.pdf', export score and parts"));
       parser.addOption(QCommandLineOption(      "no-fallback-font", "Don't use Bravura as fallback musical font"));
       parser.addOption(QCommandLineOption({"f", "force"}, "Used with '-o <file>', ignore warnings reg. score being corrupted or from wrong version"));
@@ -7209,6 +7228,18 @@ int main(int argc, char* av[])
             else
                   fprintf(stderr, "PNG resolution value '%s' not recognized, using default setting from preferences instead.\n", qPrintable(temp));
             }
+      // START MatchMySound flags
+      if (parser.isSet("P")) {
+            MScore::noGui = true;
+            partsFileName = parser.value("P");
+            if (partsFileName.isEmpty())
+                  parser.showHelp(EXIT_FAILURE);
+            }
+      if (parser.isSet("N")) {
+            MScore::noGui = true;
+            durationChecks = false;
+            }
+      // END MatchMySound flags
       if (parser.isSet("T")) {
             QString temp = parser.value("T");
             if (temp.isEmpty())
