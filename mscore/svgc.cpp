@@ -102,11 +102,11 @@ QString checkSafety(Score * score)
 
       if (nexcerpts > 60) return QString("Piece has too many parts");
 
-      score->masterScore()->setExpandRepeats(true);
-      if (score->repeatList().size() > 100) return QString("Piece has too many repeats");
+      score->repeatList()->unwind();
+      if (score->repeatList()->size() > 100) return QString("Piece has too many repeats");
 
-      if (!score->repeatList().isEmpty()) {
-            RepeatSegment * rs = score->repeatList().last();
+      if (!score->repeatList()->isEmpty()) {
+            RepeatSegment * rs = score->repeatList()->last();
             int endTick= rs->tick + rs->len();
             qreal endtime = score->tempomap()->tick2time(endTick);
 
@@ -323,8 +323,8 @@ bool MuseScore::saveSvgCollection(MasterScore * cs, const QString& saveName, con
 
       MQZipWriter uz(saveName);
 
-      cs->setExpandRepeats(true);
-      if (cs->repeatList().size()>1) {
+      cs->repeatList()->unwind();
+      if (cs->repeatList()->size()>1) {
             if (do_linearize) {
                   cs = cs->unrollRepeats();
                   }
@@ -539,7 +539,9 @@ void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, 
       if (!t2t.isEmpty()) { // Calculate unit_dur based on t2t instead
             auto ub = t2t.upperBound(bar_tick);
             if (ub == t2t.end()) ub--;
-            unit_dur = ((bar_tick*ub.value())/ub.key()-t2t[0])/ts.numerator();
+            unit_dur = (ub.value()-t2t[0])*(1.0*bar_tick/ub.key())/ts.numerator();
+
+            qWarning() << "PPM" << unit_dur << bar_tick << ub.key() << ub.value() << t2t[0] << ts.numerator();
             }
 
       QJsonArray timesig; timesig.push_back(ts.numerator()); timesig.push_back(ts.denominator());

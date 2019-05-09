@@ -122,8 +122,8 @@ bool MuseScore::saveMLData(MasterScore * cs, const QString& saveName, const QStr
       QJsonObject partsinfo;
       qreal scale_tempo = 1.0;
 
-      cs->setExpandRepeats(true);
-      if (cs->repeatList().size()>1) {
+      cs->repeatList()->unwind();
+      if (cs->repeatList()->size()>1) {
             cs = cs->unrollRepeats();
             }
 
