@@ -63,7 +63,7 @@ if (MSVC)
 endif (MSVC)
 
 # We need this early, before FindQt5
-option(BUILD_WEBENGINE "Built in webengine support" ON)
+option(BUILD_WEBENGINE "Built in webengine support" OFF)
 
 if (BUILD_WEBENGINE)
    if (MINGW)

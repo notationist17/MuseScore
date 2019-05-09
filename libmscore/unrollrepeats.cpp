@@ -111,7 +111,7 @@ static void removeRepeatMarkings(Score* score)
 //    has been unrolled
 //---------------------------------------------------------
 
-static void createExcerpts(MasterScore* cs, QList<Excerpt *> excerpts)
+void createExcerpts(MasterScore* cs, QList<Excerpt *> excerpts)
       {
       // borrowed from musescore.cpp endsWith(".pdf")
       for (Excerpt* e: excerpts) {
