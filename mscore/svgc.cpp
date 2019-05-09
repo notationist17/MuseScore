@@ -1,0 +1,960 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  Copyright (C) 2002-2019 Werner Schweer
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 2
+//  as published by the Free Software Foundation and appearing in
+//  the file LICENCE.GPL
+//=============================================================================
+
+/**
+ File handling: loading and saving.
+ */
+
+#include "config.h"
+#include "globals.h"
+#include "musescore.h"
+#include "scoreview.h"
+#include "exportmidi.h"
+#include "libmscore/xml.h"
+#include "libmscore/element.h"
+#include "libmscore/note.h"
+#include "libmscore/chord.h"
+#include "libmscore/rest.h"
+#include "libmscore/sig.h"
+#include "libmscore/clef.h"
+#include "libmscore/key.h"
+#include "instrdialog.h"
+#include "libmscore/score.h"
+#include "libmscore/page.h"
+#include "libmscore/dynamic.h"
+#include "file.h"
+#include "libmscore/style.h"
+#include "libmscore/tempo.h"
+#include "libmscore/select.h"
+#include "libmscore/staff.h"
+#include "libmscore/part.h"
+#include "libmscore/utils.h"
+#include "libmscore/barline.h"
+#include "libmscore/slur.h"
+#include "libmscore/hairpin.h"
+#include "libmscore/ottava.h"
+#include "libmscore/textline.h"
+#include "libmscore/pedal.h"
+#include "libmscore/trill.h"
+#include "libmscore/volta.h"
+#include "libmscore/timesig.h"
+#include "libmscore/box.h"
+#include "libmscore/excerpt.h"
+#include "libmscore/system.h"
+#include "libmscore/tuplet.h"
+#include "libmscore/keysig.h"
+#include "libmscore/measure.h"
+#include "libmscore/undo.h"
+#include "libmscore/repeatlist.h"
+#include "libmscore/beam.h"
+#include "libmscore/stafftype.h"
+#include "libmscore/revisions.h"
+#include "libmscore/lyrics.h"
+#include "libmscore/segment.h"
+#include "libmscore/tempotext.h"
+#include "libmscore/sym.h"
+#include "libmscore/image.h"
+#include "synthesizer/msynthesizer.h"
+#include "libmscore/synthesizerstate.h"
+#include "svggenerator.h"
+#include "libmscore/tiemap.h"
+#include "libmscore/tie.h"
+#include "libmscore/measurebase.h"
+
+#include "importmidi/importmidi_instrument.h"
+#include "preferences.h"
+
+#include "libmscore/chordlist.h"
+#include "libmscore/mscore.h"
+#include "thirdparty/qzip/qzipreader_p.h"
+#include "thirdparty/qzip/qzipwriter_p.h"
+
+#include <cstdlib>
+
+namespace Ms {
+
+//---------------------------------------------------------
+//   saveSvgCollection
+//---------------------------------------------------------
+
+void writeErrorToFile(QString errorstring, QString ofilename)
+      {
+      QFile errfile(ofilename+".err");
+      errfile.open(QIODevice::WriteOnly | QIODevice::Text);
+      errfile.write(errorstring.toUtf8());
+      errfile.close();
+      }
+
+// Check if the file might be a clever construction that would take ages to parse
+QString checkSafety(Score * score)
+      {
+
+      int nexcerpts = score->masterScore()->excerpts().size();
+
+      if (nexcerpts > 60) return QString("Piece has too many parts");
+
+      score->masterScore()->setExpandRepeats(true);
+      if (score->repeatList().size() > 100) return QString("Piece has too many repeats");
+
+      if (!score->repeatList().isEmpty()) {
+            RepeatSegment * rs = score->repeatList().last();
+            int endTick= rs->tick + rs->len();
+            qreal endtime = score->tempomap()->tick2time(endTick);
+
+            if (endtime>60*20) return QString("Piece lasts too long");
+            if (endtime*nexcerpts>60*120) return QString("Piece lasts too long with parts");
+            }
+
+      if (score->lastMeasure() == NULL) return QString("Piece has no notes");
+
+      // Empty string to signify 'no complaints'
+      return QString("");
+      }
+
+QString getInstrumentName(Instrument * in)
+      {
+      QString iname = in->trackName();
+      if (!iname.isEmpty())
+            return iname;
+
+      return MidiInstr::instrumentName(MidiType::GM,in->channel(0)->program(),in->useDrumset());
+      }
+
+void createExcerpts(MasterScore * cs, QList<Excerpt *> excerpts); // From unrollrepeats.cpp
+void createAllExcerpts(Score * score)
+      {
+      qWarning() << "Excerpts:" << score->masterScore()->excerpts().size() << " Parts:" << score->parts().size();
+      if (score->masterScore()->excerpts().size()>0 ||
+          score->parts().size()==1) return;
+
+      MasterScore * cs = score->masterScore();
+
+      // From musescore.cpp endsWith(".pdf")
+      QList<Excerpt*> excerpts = Excerpt::createAllExcerpt(cs);
+      createExcerpts(cs,excerpts);
+      }
+
+SvgGenerator * getSvgPrinter(QIODevice * device, qreal width, qreal height) 
+      {
+      SvgGenerator * printer = new SvgGenerator();
+      //printer->setResolution(preferences.getInt(PREF_EXPORT_PDF_DPI));// converterDpi);
+      printer->setTitle(QString(""));
+      printer->setDescription(QString("Generated by MuseScore %1").arg(VERSION));
+      printer->setOutputDevice(device);
+
+      qreal w = width; //* MScore::DPI;
+      qreal h = height; //* MScore::DPI;
+      printer->setSize(QSize(w, h));
+      printer->setViewBox(QRectF(0.0, 0.0, w, h));
+      MScore::pixelRatio = DPI / printer -> logicalDpiX();
+
+      return printer;
+      }
+
+QPainter * getSvgPainter(SvgGenerator * printer) {
+      QPainter * p = new QPainter(printer);
+      p->setRenderHint(QPainter::Antialiasing, true);
+      p->setRenderHint(QPainter::TextAntialiasing, true);
+
+      return p;
+      }
+
+bool stretchAudio(Score * score, const QMap<int,qreal>& t2t)
+      {
+      int ptick = -1;
+      TempoMap * tempomap = score->tempomap();
+
+      qWarning() << "TEMPO MAP" << tempomap << tempomap->relTempo();
+
+      for (int tick: t2t.keys()) {
+            //qWarning() << tick << t2t[tick]-t2t[0] << tempomap->tick2time(tick);
+
+            // NB! Constant (0.022) has to be less than one sample or very freaky stuff can happen
+            // (negative tempo etc)
+            if (ptick != 0 && // Make sure to set the tempo in the beginning!!
+                (ptick<0 || fabs((t2t[tick]-t2t[0])-tempomap->tick2time(tick))<0.022)) {
+                  //qWarning() << "Skipping tempo change "<< tick << ptick << t2t[tick]-t2t[0] << tempomap->tick2time(tick);
+                  ptick = tick;
+                  continue;
+                  }
+
+            auto te = tempomap->find(tick);
+            qreal pause = (te!=tempomap->end())?te->second.pause:0.0;
+            if (pause!=0.0) { // Shorten the pause in proportion to length of preceding note
+                  qreal pratio = pause/(pause+tempomap->tick2time(tick)-tempomap->tick2time(ptick));
+                  qWarning() << "Pause" << pause << pratio << pratio*(t2t[tick]-t2t[ptick]);
+                  pause = pratio*(t2t[tick]-t2t[ptick]);
+                  tempomap->setPause(tick,pause);
+                  }
+
+            qreal tempo = ((tick-ptick) / ((t2t[tick]-pause-t2t[0]) - tempomap->tick2time(ptick)) ) /
+                        (MScore::division * tempomap->relTempo());
+
+            if (tempo<=0) return false; // Something has gone very wrong!
+
+            qWarning() << "Change" << tempo << tempomap->tempo(ptick) << tick << ptick << pause << t2t[tick]-t2t[0] << tempomap->tick2time(tick);
+
+            tempomap->setTempo(ptick,tempo);
+
+            ptick = tick;
+            }
+      return true;
+      }
+
+void createAudioTrack(QJsonArray plist, Score * cs, const QString& afilename)
+      {
+      // Mute the parts in the current excerpt
+      for ( Part * part: cs->parts()){
+            if (!plist.contains(QJsonValue(part->id()))) {
+                  const InstrumentList* il = part->instruments();
+                  for (auto it = il->begin(); it != il->end(); ++it) {
+                        Instrument* instr = it->second;
+                        for (const Channel* instrChan: instr->channel()) {
+                              Channel* chan = part->masterScore()->playbackChannel(instrChan);
+                              //seq->stopNotes(chan->channel()); // seq.h
+                              chan->setMute(true);
+                              }
+                        }
+                  }
+            //else
+            //  qWarning() << "TEST RETURNED TRUE!!!" << endl;
+            }
+
+      // Raw file writing
+      //QFile afile(afilename);
+      //std::function<bool(float)> progressCallback = [](float) {return true;};
+      //mscore->saveAudio(cs,&afile,progressCallback);
+
+      mscore->saveAudio(cs,afilename);
+
+      // Unmute all parts
+      for ( Part * part: cs->parts()) {
+            const InstrumentList* il = part->instruments();
+            for (auto it = il->begin(); it != il->end(); ++it) {
+                  Instrument* instr = it->second;
+                  for (const Channel* instrChan: instr->channel()) {
+                        Channel* chan = part->masterScore()->playbackChannel(instrChan);
+                        chan->setMute(false);
+                        }
+                  }
+            }
+      }
+
+void addFileToZip(MQZipWriter * uz, const QString& filename, const QString & zippath)
+      {
+      QFile file(filename);
+      file.open(QIODevice::ReadOnly);
+      uz->addFile(zippath,&file);
+      file.remove();
+      }
+
+void setSynthSettings(Score * cs)
+      {
+      // Set sample rate
+      preferences.setPreference(PREF_EXPORT_AUDIO_SAMPLERATE,22050);
+
+      // Find the master settings group
+      SynthesizerGroup * sg = NULL; // Get a proper pointer
+      for (SynthesizerGroup& g : cs->synthesizerState())
+            if (g.name() == "master") { sg = &g; break; }
+
+      // If no master group, create it from defaults
+      if (sg==NULL) {
+            cs->synthesizerState().push_back(defaultState.front());
+            sg = &(cs->synthesizerState().back());
+            }
+
+      // Set both effect blocks to 'no effect'
+      qWarning() << "Setting synth effects to no effect";
+      for (IdValue & idv : *sg) {
+            qWarning() << "SG Values" << idv.id << idv.data;
+            if (idv.id==0 || idv.id==1) idv.data = "NoEffect";
+            }
+
+      //for (IdValue idv: cs->synthesizerState().group("master"))
+      //  qWarning() << "Synth Master Values" << idv.id << idv.data;
+      }
+
+void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, const QMap<int,qreal>& t2t, const QMap<int,qreal>& orig_t2t, const qreal t0);
+
+bool MuseScore::saveSvgCollection(MasterScore * cs, const QString& saveName, const bool do_linearize, const QString& partsName, const bool durationChecks)
+      {
+
+      //cs->setSpatium(5); // = 1.76389mm; SVG export broken for other values
+
+      QJsonObject partsinfo;
+      qreal scale_tempo = 1.0;
+
+      if (!partsName.isEmpty()) {
+            QFile partsfile(partsName);
+            partsfile.open(QIODevice::ReadOnly | QIODevice::Text);
+            partsinfo = QJsonDocument::fromJson(partsfile.readAll()).object();
+
+            if (partsinfo.contains("scale_tempo"))
+                  scale_tempo = partsinfo["scale_tempo"].toDouble();
+            }
+
+      //qreal rel_tempo = cs->tempomap()->relTempo();
+      cs->tempomap()->setRelTempo(scale_tempo);
+
+      // Safety check - done after tempo change just in case.
+
+
+      if (durationChecks) {
+            QString safe = checkSafety(cs);
+            if (!safe.isEmpty() && // The input scorefile is too long
+                (partsinfo.isEmpty() || !partsinfo["production"].toBool(false))) { // Not in production mode
+                  writeErrorToFile(safe,saveName);
+                  qDebug() << safe << endl;
+                  return false;
+                  }
+            }
+
+      QMap<int,qreal> tick2time, orig_t2t; // latter is bypassed, if empty!
+
+      MQZipWriter uz(saveName);
+
+      cs->setExpandRepeats(true);
+      if (cs->repeatList().size()>1) {
+            if (do_linearize) {
+                  cs = cs->unrollRepeats();
+                  }
+            else {
+                  QMessageBox::critical(0, QObject::tr("SVC export Failed"),
+                                        QObject::tr("Score contains repeats. Please linearize!"));
+                  return false;
+                  }
+            }
+
+      createAllExcerpts(cs);
+
+      // Switch voice tracks to "Solo vox" instrument
+
+      /*int hb=0, lb=0, pr=85; // midiinstrument.cpp - Solo vox
+    int prog = (hb<<16) | ((lb&0xff)<<8) | (pr&0xff);
+    qWarning() << "TEST INSTRUMENT" << prog << MidiInstr::instrumentName(MidiType::GM,prog,false);*/
+      for ( Part * part: cs->parts()) {
+            //Instrument * in = part->instrument();
+            for ( Channel * channel: part->instrument()->channel()) {
+                  int prog = channel->program();
+                  if (prog==52 || prog==53 || prog==54)
+                        channel->setProgram(85); // Solo vox
+                  // Hack needed for fluidsynth as it did not register rests for steel guitar (25)
+                  //if (prog==25) channel->setProgram(24); // Steel guitar -> Nylon guitar because of bug with rests
+                  };
+            //qWarning() << "TRACK NAME " << in->trackName()
+            //  << MidiInstr::instrumentName(MidiType::GM,in->channel(0)->program(),in->useDrumset());
+            }
+
+      setSynthSettings(cs);
+
+      Score* thisScore = cs->masterScore();
+      if (partsinfo.isEmpty()) {
+
+            qWarning() << "NO PARTSINFO";
+            /*
+      // Convert to tab (list of types in stafftype.h)
+      for ( Staff * staff: cs->staves())
+         staff->setStaffType(StaffType::preset(StaffTypes::TAB_6COMMON));
+      */
+
+            // Add audiofile
+            QString tname("1.ogg");
+            saveAudio(cs,tname);
+            addFileToZip(&uz, tname, tname);
+
+            int ei = 0, t0 = 0.0;
+            QString prefix = QString::number(ei++)+'/';
+            createSvgCollection(&uz, cs, prefix, tick2time, orig_t2t ,t0);
+            //createSvgCollection(&uz, cs, QString("0/"), orig_t2t, 0.0);
+
+            /*for (Excerpt* e: thisScore->excerpts())  {
+        Score * tScore = e->partScore();
+        //qWarning() << "SVC: CREATING PART" << ei;
+
+        prefix = QString::number(ei++)+'/';
+        createSvgCollection(&uz, tScore, prefix, orig_t2t, t0);
+      }*/
+            }
+      else {
+
+            qreal t0 = 0.0;
+
+            if (partsinfo.contains("onsets")) {
+                  QJsonObject onsets = partsinfo["onsets"].toObject();
+                  QJsonArray ticks = onsets["ticks"].toArray();
+                  QJsonArray times = onsets["times"].toArray();
+
+                  t0 = times[0].toDouble() - cs->tempomap()->tick2time(0);
+
+                  for (int i=0;i<ticks.size();i++) {
+                        int tick = ticks[i].toInt();
+                        tick2time[tick] = times[i].toDouble();
+                        orig_t2t[tick] = t0 + cs->tempomap()->tick2time(tick);
+
+                        qWarning() << "MAP" << tick << times[i].toDouble();
+                        }
+
+                  }
+
+            // Number parts just the same as exporting metadata
+            int pi = 1;
+            for ( Part * part: cs->parts()) {
+                  part->setId(QString::number(pi++));
+                  }
+
+            // qWarning() << "JSON HAS " << partsinfo.size() << " PARTS" << endl;
+
+            qWarning() << "SVC: Creating audio";
+
+            QJsonObject atracks = partsinfo["audiotracks"].toObject();
+
+            if (!stretchAudio(cs, tick2time)) {
+                  writeErrorToFile(QString("Invalid tempo map!"),saveName);
+                  }
+
+            Measure* lastm = cs->lastMeasure();
+            int total_ticks = (lastm->tick()+lastm->ticks()).ticks();
+
+            qWarning() << "SVC: TICKS TIME" << total_ticks <<  cs->tempomap()->tick2time(total_ticks);
+
+            for ( QString key: atracks.keys()) {
+                  // Synthesize the described track
+                  QJsonObject atobj = atracks[key].toObject();
+
+                  if (atobj["synthesize"].toBool()) {
+                        QString tname = key + ".ogg";
+                        qWarning() << "Synthesizing" << tname;
+                        createAudioTrack(atobj["parts"].toArray(),cs,tname);
+                        addFileToZip(&uz, tname, tname);
+                        }
+                  }
+
+
+            if (partsinfo.contains("excerpts")) {
+                  qWarning() << "SVC: Creating SVGS";
+
+                  int ei = 0;
+                  QString prefix = QString::number(ei++)+'/';
+                  createSvgCollection(&uz, cs, prefix, tick2time, orig_t2t ,t0);
+
+                  for (Excerpt* e: thisScore->excerpts())  {
+                        Score * tScore = e->partScore();
+                        //qWarning() << "SVC: CREATING PART" << ei;
+
+                        prefix = QString::number(ei++)+'/';
+                        createSvgCollection(&uz, tScore, prefix, tick2time, orig_t2t, t0);
+                        }
+                  }
+            else if (partsinfo.contains("demo")) { // create svg of just one excerpt
+                  Score * tScore = cs;
+                  int ind = partsinfo["demo"].toInt();
+                  if (ind>0) tScore = thisScore->excerpts()[ind-1]->partScore();
+                  createSvgCollection(&uz, tScore, "demo/", tick2time, orig_t2t, t0);
+                  }
+            }
+      uz.close();
+
+      // This causes segfaults on rare occasions
+      //cs->tempomap()->setRelTempo(rel_tempo);
+
+      return true;
+      }
+
+// Return the first note of the piece
+Note * first_note(Score * score)
+      {
+      for ( Page* page: score->pages() ) {
+            for ( System* sys: page->systems() ) {
+
+                  QList<const Element*> elems;
+                  for (MeasureBase *m: sys->measures())
+                        m->scanElements(&elems, collectElements, false);
+
+                  for (const Element * e: elems)
+                        if (e->isNote()) {
+                              Note * note = (Note*)e;
+                              return note;
+                              }
+                  }
+            }
+      return NULL;
+      }
+
+QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& t2t, const QMap<int,qreal>& orig_t2t, const qreal t0, QString basename);
+
+void createSvgCollection(MQZipWriter * uz, Score* score, const QString& prefix, const QMap<int,qreal>& t2t, const QMap<int,qreal>& orig_t2t, const qreal t0)
+      {
+
+      QJsonObject qts = QJsonObject();
+
+      // Basic metadata
+
+      qts["title"] = score->title().trimmed();
+      qts["subtitle"] = "";
+      qts["composer"] = score->metaTag("composer").trimmed();
+
+      // As subtitle is not a metatag, I had to reverse-engineer getNewFile wizard from file.cpp
+      MeasureBase * head = score->measures()->first();
+      if (head->isVBox())
+            for (Element * el: head->el()) {
+                  if (el->isText()) continue;
+                  Text * tel = (Text*)el;
+                  switch(tel->tid()) {
+                        case Tid::TITLE: qts["title"] = tel->plainText().trimmed(); break;
+                        case Tid::SUBTITLE: qts["subtitle"] = tel->plainText().trimmed(); break;
+                        case Tid::COMPOSER: qts["composer"] = tel->plainText().trimmed(); break;
+                        default: break;
+                        }
+                  }
+      qWarning() << "METAINFO" << qts["title"] << qts["subtitle"] << qts["composer"];
+      
+
+      // Instruments
+      QJsonArray iar;
+      for ( Part * part: score->parts()) {
+            QString iname = getInstrumentName(part->instrument());
+            if (iname.length()>0)
+                  iar.push_back(iname);
+            }
+      qts["instruments"] = iar;
+
+      // Initial time signature and ppm
+      Fraction ts = score->firstMeasure()->timesig();
+
+      // 480 ticks per quarter note - so calculated from the duration of a normal length bar from beginning
+      int bar_tick = 1920*ts.numerator()/ts.denominator();
+      qreal unit_dur = (score->tempomap()->tick2time(bar_tick) -
+                        score->tempomap()->tick2time(0))/ts.numerator();
+
+      if (!t2t.isEmpty()) { // Calculate unit_dur based on t2t instead
+            auto ub = t2t.upperBound(bar_tick);
+            if (ub == t2t.end()) ub--;
+            unit_dur = ((bar_tick*ub.value())/ub.key()-t2t[0])/ts.numerator();
+            }
+
+      QJsonArray timesig; timesig.push_back(ts.numerator()); timesig.push_back(ts.denominator());
+      qts["time_signature"] = timesig;
+      qts["ppm"] =(60.0/unit_dur);
+
+      Note * first = first_note(score);
+      if (first!=NULL) {
+            qts["first_note_pitch"] = first->ppitch();
+            qreal tuning = 440.0*pow(2,first->tuning()/1200.0);
+            qts["tuning"] = tuning;
+            qts["first_note_hz"] = tuning*pow(2,(first->ppitch()-69)/12.0);
+            }
+
+      // Total ticks/time to end.
+      Measure* lastm = score->lastMeasure();
+
+      int total_ticks = (lastm->tick()+lastm->ticks()).ticks();
+      qts["total_ticks"] = total_ticks;
+
+      qts["total_time"] = (t2t.isEmpty() || !t2t[total_ticks])?
+                              (t0 + score->tempomap()->tick2time(total_ticks)):t2t[total_ticks];
+      qts["meta_version"] = 2;
+
+      score->setPrinting(true);
+      MScore::pdfPrinting = true;
+
+      LayoutMode layout_mode = score->layoutMode();
+
+      score->setLayoutMode(LayoutMode::PAGE); score->doLayout();
+      qts["systems"] = createSvgs(score,uz,t2t,orig_t2t,t0,prefix+QString("Page"));
+
+      score->setLayoutMode(LayoutMode::LINE); score->doLayout();
+      qts["csystem"] = createSvgs(score,uz,t2t,orig_t2t,t0,prefix+QString("Line"))[0];
+
+      score->setLayoutMode(layout_mode); score->doLayout();
+
+      score->setPrinting(false);
+      MScore::pdfPrinting = false;
+
+      uz->addFile(prefix+"metainfo.json",QJsonDocument(qts).toJson());
+      }
+
+QSet<ChordRest *> * mark_tie_ends(QList<const Element*> const &elems)
+      {
+      QSet<ChordRest*>* res = new QSet<ChordRest*>;
+      for (const Element * e: elems) {
+            //qDebug()<<e->name();
+            if (e->isSlurSegment()) {
+                  SlurSegment * ss = (SlurSegment *)e;
+
+                  bool same = ss->slurTie()->isTie();
+                  if (!same) { // Not formally a tie
+                        // However, Mscore allows a slur to be put
+                        // where it actually is a tie, so check
+                        Spanner * span = ss->spanner();
+
+                        Chord *beg = (Chord*)span->startElement(),
+                                    *end = (Chord*)span->endElement();
+
+                        if (!beg->isChord()) continue;
+
+                        // Check if all the chords in after beg up to end match beg
+                        same = true;
+                        Chord * cur = beg->nextTiedChord();
+
+                        //qDebug() << "CHECKING IF SLUR IS TIE" << beg << end << cur;
+                        int count = 0;
+                        while (cur!=NULL) {
+                              //qDebug() << "Foud EL" << cur;
+
+                              same = same && (beg->notes().size() == cur->notes().size());
+
+                              if (same) {
+                                    for (unsigned int i = 0; i< beg->notes().size(); i++)
+                                          same = same && (beg->notes()[i]->ppitch() == cur->notes()[i]->ppitch());
+                                    }
+
+                              if (!same || cur==end || cur->tick() > end->tick()) break;
+                              else cur = cur->nextTiedChord();
+
+                              count += 1; if (count>1000) { same=false; break; }; // Safety against infloop
+                              }
+                        //qDebug() << "WHILE EXITED";
+                        }
+
+                  if (same) {
+                        qDebug() << "CONVERTING SLUR TO TIE";
+                        SlurSegment * ss = (SlurSegment *)e;
+                        res->insert( (ChordRest*)ss->slurTie()->endElement() );
+                        }
+                  //else qDebug() << "SLUR FOUND";
+                  }
+            }
+
+      qDebug() << "TIES MARKED";
+
+      return res;
+      }
+
+bool sysOnlyBoxes(System * s)
+      {
+      bool has_actual_measure = false;
+      for (MeasureBase* mb: s->measures())
+            if (!mb->isHBox() && !mb->isVBox()) {
+                  has_actual_measure = true; break;
+                  }
+
+      //if (!has_actual_measure) qWarning() << "Skipping a system of only boxes"
+      return !has_actual_measure;
+      }
+
+qreal * find_margins(Score * score)
+      {
+
+      qreal max_tm=0.0, max_bm=0.0;
+
+      for ( Page* page: score->pages() ) {
+            for ( System* sys: page->systems()) {
+                  if (sysOnlyBoxes(sys)) continue; // Skip vboxes like the heading that can be a lot bigger
+
+                  QRectF sys_rect = sys->pageBoundingRect();
+                  qreal sys_top = sys_rect.top();
+                  qreal sys_bot = sys_rect.bottom();
+                  //qDebug() << "SYSTEM: " << sys_top << " " << sys_bot << endl;
+
+                  qreal max_top = sys_top, max_bot = sys_bot;
+
+                  QList<const Element*> elems;
+                  for (MeasureBase *m: sys->measures())
+                        m->scanElements(&elems, collectElements, false);
+                  sys->scanElements(&elems, collectElements, false);
+
+                  for (const Element * e: elems) {
+                        QRectF rect = e->pageBoundingRect();
+                        qreal top = rect.top();
+                        qreal bot = rect.bottom();
+
+                        //if (e->isSlurSegment())
+                        //qDebug() << e->name() << sys_top-top << bot-sys_bot;
+
+                        if (!e->visible()) continue;
+
+                        if (top<max_top)  {
+                              max_top = top;
+                              //qDebug() << "T" << sys_top-max_top << " " << e->name() << e->height();
+                              }
+                        if (bot>max_bot) {
+                              max_bot = bot;
+                              //qDebug() << "B" << max_bot-sys_bot << " " << e->name() << e->height();
+                              }
+                        }
+
+                  qDebug() << "MARGINS " << sys_top-max_top << " " << max_bot-sys_bot << endl;
+
+                  if (sys_top-max_top>max_tm) max_tm = sys_top-max_top;
+                  if (max_bot-sys_bot>max_bm) max_bm = max_bot-sys_bot;
+                  }
+            }
+
+      //qDebug() << "MARGINS: "<< max_tm << " " << max_bm << " " << score->styleP(Sid::minSystemDistance)/2 << endl;
+
+      qreal * res = new qreal[2];
+      res[0] = max_tm; res[1] = max_bm;
+      return res;
+      }
+
+QJsonArray createSvgs(Score* score, MQZipWriter * uz, const QMap<int,qreal>& t2t, const QMap<int,qreal>& orig_t2t, const qreal t0, QString basename)
+      {
+
+      SvgGenerator * printer = NULL;
+      QPainter * p = NULL;
+      QBuffer * svgbuf=NULL;
+
+      qreal w=1.0, h=1.0;
+      uint count = 1;
+
+      int firstNonRest = 0, lastNonRest = 0;
+
+      QString svgname = "";
+
+      qreal * margins =  find_margins(score);
+      qreal top_margin = margins[0]+0.5;
+      qreal bot_margin = margins[1]+0.5;
+      qreal h_margin = score->styleP(Sid::staffDistance);
+      if (top_margin<bot_margin) top_margin = bot_margin;
+      delete [] margins;
+
+      QSet<ChordRest *> * tie_ends = NULL;
+
+      TempoMap * tempomap = score->tempomap();
+
+      QJsonArray result;
+      
+      // Find max system width
+      qreal max_w = 0;
+      int nsystems = 0;
+      for ( Page* page: score->pages() )
+            for ( System* sys: page->systems() ) {
+                  if (sysOnlyBoxes(sys)) continue; // Skip vboxes like the heading that can be a lot bigger
+                  qreal cur_w = sys->pageBoundingRect().width();
+                  if (cur_w>max_w) max_w = cur_w;
+                  nsystems++;
+                  }
+
+      // Stretch the only system to the end by adding a hbox
+      if (nsystems==1) {
+            score->insertMeasure(Ms::ElementType::HBOX,0);
+            score->doLayout();
+            }
+
+      for ( Page* page: score->pages() ) {
+            for ( System* sys: page->systems() ) {
+                  QJsonObject sobj;
+
+                  QRectF sys_rect = sys->pageBoundingRect();
+                  w = max_w + 2*h_margin; // Make systems uniform width
+
+                  h = sys_rect.height() + top_margin + bot_margin;
+
+                  //if (sys_rect.width()>max_w) w = sys_rect.width(); // Make sure vboxes are not cropped
+
+                  svgname = basename + QString::number(count++)+".svg";
+                  sobj["img"] = svgname;
+                  sobj["width"] = w;
+                  sobj["height"] = h;
+
+                  // Staff vertical positions
+                  QJsonArray staves;
+                  for (int i=0;i<sys->staves()->size();i++) {
+                        QRectF bbox = sys->bboxStaff(i);
+                        QJsonArray vbounds;
+                        vbounds.push_back((top_margin+bbox.top())/h);
+                        vbounds.push_back((top_margin+bbox.bottom())/h);
+                        staves.push_back(vbounds);
+                        }
+                  sobj["staves"] = staves;
+
+                  svgbuf = new QBuffer();
+                  svgbuf->open(QIODevice::ReadWrite);
+
+                  qreal dx = -(sys_rect.left()-h_margin),
+                              dy = -(sys_rect.top()-top_margin);
+                  printer = getSvgPrinter(svgbuf,w,h);
+                  p = getSvgPainter(printer);
+                  p->translate(dx,dy);
+
+                  // Collect together all elements belonging to this system!
+                  QList<const Element*> elems;
+                  for (MeasureBase *m: sys->measures()) {
+                        elems.push_back(m);
+                        m->scanElements(&elems, collectElements, false);
+                        }
+                  sys->scanElements(&elems, collectElements, false);
+
+                  qreal end_pos = -1.0;
+                  QJsonArray barlines, bartimes, barbeats, barirregular;
+                  QMap<int,qreal> tick2pos;
+                  QMap<int,int> just_tied; // just the end of tied note
+                  QMap<int,int> is_rest;
+                  QMap<int,QList<int>> pitches;
+                  tie_ends = mark_tie_ends(elems);
+
+                  bool has_tmap = !t2t.isEmpty();
+
+                  for (const Element * e: elems) {
+
+                        // if (!e->visible()) continue; // Flamenco book had noteheads hidden...
+
+                        if (e->isTempoText())
+                              continue;
+
+                        QRectF bb = e->pageBoundingRect();
+
+                        // Make an exception for rests that are full measure length
+                        // Make them start at the barline instead of at the symbol
+                        if (e->isRest() &&
+                            ((Rest*)e)->isFullMeasureRest() )
+                              bb = ((Rest*)e)->measure()->pageBoundingRect();
+
+                        qreal lpos = (bb.left()+dx)/w;
+
+                        if (e->isNote() ||  e->isRest()) {
+
+                              ChordRest * cr = (e->isNote()?
+                                                      (ChordRest*)( ((Note*)e)->chord()):(ChordRest*)e);
+
+                              int tick = cr->segment()->tick().ticks();
+
+                              //qWarning() << "POS" << tick << tick2pos.value(tick,-1) << lpos << is_rest.value(tick,false) << (e->isNote());
+                              if (!tick2pos.contains(tick) || tick2pos[tick]<lpos ||
+                                  (is_rest.value(tick,false) && e->isNote())) // is_rest check here mainly for the full measure rest special case if there are notes in other voices
+                                    tick2pos[tick] = lpos;
+
+                              //qWarning() << "NPOS" << tick << tick2pos[tick];
+
+                              // NB! ar[17] = !ar.contains(17); would not work as expected...
+                              just_tied.insert(tick,just_tied.value(tick,true) &&
+                                               (e->isNote() &&
+                                                tie_ends->contains(cr)));
+                              is_rest.insert(tick,is_rest.value(tick,true) &&
+                                             (e->isRest()));
+
+                              Note * note = (Note*)e;
+                              if (e->isNote()) {
+                                    if (!pitches.contains(tick))
+                                          pitches.insert(tick,QList<int>());
+                                    pitches[tick].push_back(note->ppitch());
+                                    }
+
+                              // Update the bounds for actual audio
+                              if (e->isNote()) {
+                                    if (firstNonRest<0 || tick<firstNonRest) firstNonRest = tick;
+                                    int dur = cr->durationTypeTicks().ticks();
+                                    if (tick+dur > lastNonRest) lastNonRest = tick+dur;
+                                    }
+
+                              }
+                        else if (e->isMeasure()) {
+                              Measure * m = (Measure*)e;
+                              barlines.push_back(lpos);
+                              barbeats.push_back(m->ticks().numerator());
+                              barirregular.push_back(m->irregular()?1:0);
+
+                              int tick = m->first()->tick().ticks();
+                              bartimes.push_back(has_tmap?t2t[tick]:tempomap->tick2time(tick)+t0);
+
+                              end_pos = (bb.right()+dx)/w;
+                              }
+                        }
+
+                  if (end_pos>0)
+                        barlines.push_back(end_pos);
+
+                  // Actual drawing
+                  qStableSort(elems.begin(), elems.end(), elementLessThan);
+                  for (const Element * e: elems) {
+
+                        if (!e->visible())
+                              continue;
+
+                        if (e->isTempoText())
+                              continue;
+
+                        printer->setElement(e);
+
+                        QPointF pos(e->pagePos());
+                        p->translate(pos);
+                        e->draw(p);
+                        p->translate(-pos);
+                        }
+                  p->end();
+
+                  svgbuf->seek(0);
+                  uz->addFile(svgname,svgbuf->data());
+                  svgbuf->close();
+
+                  delete p; delete svgbuf; delete tie_ends;
+
+                  QJsonArray ticks, times, otimes, positions, change, rest, pitches_ar;
+
+                  bool has_original = orig_t2t.isEmpty();
+                  bool is_monophonic = true;
+
+                  for (int tick: tick2pos.keys()){
+                        ticks.push_back(tick);
+                        qreal ttime = has_tmap?t2t[tick]:(tempomap->tick2time(tick) + t0);
+                        //qWarning() << "TICK" << tick << "TIME" << ttime << "T2T" << t2t[tick] << "OTIME" << orig_t2t[tick];
+                        times.push_back(ttime);
+                        otimes.push_back(has_original?orig_t2t[tick]:ttime);
+                        positions.push_back(tick2pos[tick]);
+
+                        // Write midi pitches: number for monophonic, list for chord, -1 for rest
+                        // NB! This is for notes that start at this tick. Does not count previous notes fading into this (ongoing notes)
+                        if (pitches.contains(tick)) {
+                              if (pitches.value(tick).length()==1)
+                                    pitches_ar.push_back(pitches.value(tick).first());
+                              else {
+                                    is_monophonic = false;
+                                    QJsonArray pa;
+                                    for (int pitch: pitches.value(tick)) {
+                                          pa.push_back(pitch);
+                                          }
+                                    pitches_ar.push_back(pa);
+                                    }
+                              }
+                        else pitches_ar.push_back(-1);
+
+                        change.push_back(int(!(just_tied[tick] || (rest.last().toInt() && is_rest[tick]))));
+                        rest.push_back(int(is_rest[tick]));
+                        }
+
+                  sobj["notes"] = positions;
+                  sobj["ticks"] = ticks;
+                  sobj["pitches"] = pitches_ar;
+
+                  sobj["blines"] = barlines;
+                  sobj["btimes"] = bartimes;
+                  sobj["bbeats"] = barbeats;
+                  sobj["birreg"] = barirregular;
+
+                  sobj["times"] = times;
+                  sobj["otimes"] = otimes;
+                  sobj["is_change"] = change;
+                  sobj["is_rest"] = rest;
+
+                  sobj["monophonic"] = is_monophonic;
+
+                  result.push_back(sobj);
+                  }
+            }
+
+      // Print actual audio bounds (i.e. the interval outside which everything is silence)
+      //(*qts) << "AA " << tempomap->tick2time(firstNonRest) << ',' << tempomap->tick2time(lastNonRest) << endl;
+
+      return result;
+      }
+}
